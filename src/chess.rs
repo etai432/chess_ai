@@ -1,16 +1,13 @@
 use macroquad::prelude::*;
-use std::thread;
-use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Chess {
     textures: [Texture2D; 13],
-    board: [Piece; 64],
-    moves: Vec<usize>,
-    casting: (bool, bool, bool, bool),
+    pub board: [Piece; 64],
+    pub moves: Vec<usize>,
+    casting: [bool; 4], //white, white long, black, black long
     en_passant: usize,
     pub is_white_turn: bool,
-    mouse_pos: usize,
 }
 
 impl Chess {
@@ -25,11 +22,11 @@ impl Chess {
         board[5] = Piece::Bbishop;
         board[6] = Piece::Bknight;
         board[7] = Piece::Brook;
-        // board
-        //     .iter_mut()
-        //     .take(16)
-        //     .skip(8)
-        //     .for_each(|piece| *piece = Piece::Bpawn);
+        board
+            .iter_mut()
+            .take(16)
+            .skip(8)
+            .for_each(|piece| *piece = Piece::Bpawn);
         // Set up white pieces
         board[56] = Piece::Wrook;
         board[57] = Piece::Wknight;
@@ -39,11 +36,11 @@ impl Chess {
         board[61] = Piece::Wbishop;
         board[62] = Piece::Wknight;
         board[63] = Piece::Wrook;
-        // board
-        //     .iter_mut()
-        //     .take(56)
-        //     .skip(48)
-        //     .for_each(|piece| *piece = Piece::Wpawn);
+        board
+            .iter_mut()
+            .take(56)
+            .skip(48)
+            .for_each(|piece| *piece = Piece::Wpawn);
         Chess {
             textures: [
                 Texture2D::from_file_with_format(include_bytes!(r".\images\board.png"), None),
@@ -74,10 +71,9 @@ impl Chess {
             ],
             board,
             moves: Vec::new(),
-            casting: (true, true, true, true),
+            casting: [true; 4],
             en_passant: 65,
             is_white_turn: true,
-            mouse_pos: 0,
         }
     }
     pub fn draw(&self) {
@@ -142,7 +138,7 @@ impl Chess {
     }
     pub fn is_legal(&mut self, from: usize, to: usize) -> bool {
         let temp_board = self.board;
-        self.move_piece(from, to);
+        self.move_piece(from, to, false);
         let check = !self.is_check();
         self.board = temp_board;
         check
@@ -184,10 +180,51 @@ impl Chess {
         }
         false
     }
-    pub fn move_piece(&mut self, from: usize, to: usize) {
+    pub fn move_piece(&mut self, from: usize, to: usize, apply_castling: bool) {
         let piece = self.board[from];
+        if apply_castling {
+            match piece {
+                Piece::Bking => {
+                    self.casting[2] = false;
+                    self.casting[3] = false;
+                }
+                Piece::Wking => {
+                    self.casting[0] = false;
+                    self.casting[1] = false;
+                }
+                Piece::Brook => {
+                    if from == 7 {
+                        self.casting[2] = false;
+                    } else if from == 0 {
+                        self.casting[3] = false;
+                    }
+                }
+                Piece::Wrook => {
+                    if from == 63 {
+                        self.casting[0] = false;
+                    } else if from == 56 {
+                        self.casting[1] = false;
+                    }
+                }
+                _ => (),
+            }
+        }
         self.board[from] = Piece::Empty;
-        self.board[to] = piece;
+        if let Piece::Wpawn = piece {
+            if to < 8 {
+                self.board[to] = Piece::Wqueen;
+            } else {
+                self.board[to] = piece;
+            }
+        } else if let Piece::Bpawn = piece {
+            if to >= 56 {
+                self.board[to] = Piece::Bqueen;
+            } else {
+                self.board[to] = piece;
+            }
+        } else {
+            self.board[to] = piece;
+        }
         if let Piece::Wpawn = piece {
             if to == self.en_passant {
                 let captured_piece_index = to - 8; // Assuming en passant captures happen in the row above
@@ -199,25 +236,25 @@ impl Chess {
                 self.board[captured_piece_index] = Piece::Empty;
             }
         }
-        if let Piece::Wking = piece {
+        if let Piece::Bking = piece {
             if from == 4 && to == 6 {
                 // Perform kingside castling for white
                 self.board[7] = Piece::Empty;
-                self.board[5] = Piece::Wrook;
+                self.board[5] = Piece::Brook;
             } else if from == 4 && to == 2 {
                 // Perform queenside castling for white
                 self.board[0] = Piece::Empty;
-                self.board[3] = Piece::Wrook;
+                self.board[3] = Piece::Brook;
             }
-        } else if let Piece::Bking = piece {
+        } else if let Piece::Wking = piece {
             if from == 60 && to == 62 {
                 // Perform kingside castling for black
                 self.board[63] = Piece::Empty;
-                self.board[61] = Piece::Brook;
+                self.board[61] = Piece::Wrook;
             } else if from == 60 && to == 58 {
                 // Perform queenside castling for black
                 self.board[56] = Piece::Empty;
-                self.board[59] = Piece::Brook;
+                self.board[59] = Piece::Wrook;
             }
         }
     }
@@ -231,8 +268,8 @@ impl Chess {
             }
             Piece::Wrook | Piece::Brook => self.gen_moves_rook(index),
             Piece::Wbishop | Piece::Bbishop => self.gen_moves_bishop(index),
-            // Piece::Wknight | Piece::Bknight => self.gen_moves_knight(index),
-            // Piece::Wpawn | Piece::Bpawn => self.gen_moves_pawn(index),
+            Piece::Wknight | Piece::Bknight => self.gen_moves_knight(index),
+            Piece::Wpawn | Piece::Bpawn => self.gen_moves_pawn(index),
             _ => Vec::new(),
         }
     }
@@ -276,49 +313,37 @@ impl Chess {
                 }
             }
         }
-        if piece.is_white() {
-            if self.casting.0
-                && index == 4
+        if !piece.is_white() {
+            if self.casting[2]
                 && self.board[5] == Piece::Empty
                 && self.board[6] == Piece::Empty
                 && self.board[7] == Piece::Wrook
             {
                 moves.push(6);
-            } else {
-                self.casting.0 = false;
             }
-            if self.casting.1
-                && index == 4
+            if self.casting[3]
                 && self.board[3] == Piece::Empty
                 && self.board[2] == Piece::Empty
                 && self.board[1] == Piece::Empty
                 && self.board[0] == Piece::Wrook
             {
                 moves.push(2);
-            } else {
-                self.casting.1 = false;
             }
         } else {
-            if self.casting.2
-                && index == 60
+            if self.casting[0]
                 && self.board[61] == Piece::Empty
                 && self.board[62] == Piece::Empty
                 && self.board[63] == Piece::Brook
             {
                 moves.push(62);
-            } else {
-                self.casting.2 = false;
             }
-            if self.casting.3
-                && index == 60
+            if self.casting[1]
                 && self.board[59] == Piece::Empty
                 && self.board[58] == Piece::Empty
                 && self.board[57] == Piece::Empty
                 && self.board[56] == Piece::Brook
             {
                 moves.push(58);
-            } else {
-                self.casting.3 = false;
             }
         }
         moves
@@ -416,43 +441,81 @@ impl Chess {
         }
         moves
     }
-    pub fn get_mouse_pos(&mut self) {
-        let mouse_pos = mouse_position();
-        if mouse_pos.0 as usize / 100 + mouse_pos.1 as usize / 100 * 8 > 63 {
-            self.mouse_pos = 63;
-        }
-        self.mouse_pos = mouse_pos.0 as usize / 100 + mouse_pos.1 as usize / 100 * 8;
-    }
-    pub async fn player_turn(&mut self, is_white: bool) {
-        loop {
-            self.draw();
-            self.draw_moves();
-            next_frame().await;
-            thread::sleep(Duration::from_millis(100));
-            if self.board[self.mouse_pos].is_white() == is_white {
-                let piece_index = self.mouse_pos;
-                self.get_legals(piece_index);
-                while !is_mouse_button_pressed(MouseButton::Left) {
-                    self.draw();
-                    self.draw_moves();
-                    next_frame().await;
+    fn gen_moves_knight(&mut self, index: usize) -> Vec<usize> {
+        let mut moves = vec![];
+        let piece = self.board[index];
+        // Define the possible king moves in terms of row and column offsets
+        let offsets: [(i32, i32); 8] = [
+            (-2, -1),
+            (-1, 2),
+            (-1, -2),
+            (2, -1),
+            (2, 1),
+            (1, -2),
+            (1, 2),
+            (-2, 1),
+        ];
+        let row = index / 8;
+        let col = index % 8;
+        // Generate potential moves for each offset
+        for &(row_offset, col_offset) in offsets.iter() {
+            let new_row = row as i32 + row_offset;
+            let new_col = col as i32 + col_offset;
+            // Check if the new position is within the board boundaries
+            if (0..8).contains(&new_row) && (0..8).contains(&new_col) {
+                let new_index = (new_row * 8 + new_col) as usize;
+                // Check if the destination is empty or occupied by an opponent's piece
+                if self.is_opponent_piece(self.board[new_index], piece)
+                    || self.board[new_index] == Piece::Empty
+                {
+                    moves.push(new_index);
                 }
-                self.get_mouse_pos();
-                if self.moves.contains(&self.mouse_pos) {
-                    self.move_piece(piece_index, self.mouse_pos);
-                    self.moves = vec![];
-                    break;
-                }
-            } else {
-                self.moves = vec![];
-                while !is_mouse_button_pressed(MouseButton::Left) {
-                    self.draw();
-                    self.draw_moves();
-                    next_frame().await;
-                }
-                self.get_mouse_pos();
             }
         }
+        moves
+    }
+    fn gen_moves_pawn(&self, position: usize) -> Vec<usize> {
+        let mut moves: Vec<usize> = Vec::new();
+        let row = position / 8;
+        let col = position % 8;
+        let is_white = self.board[position].is_white();
+        let direction = if is_white { -1 } else { 1 };
+        // Check for forward movement
+        let forward_row = (row as isize) + direction;
+        if (0..8).contains(&forward_row) {
+            let forward_pos = (forward_row as usize) * 8 + col;
+            if self.board[forward_pos] == Piece::Empty {
+                moves.push(forward_pos);
+            }
+        }
+        if is_white
+            && row == 6
+            && self.board[col + 32] == Piece::Empty
+            && self.board[col + 40] == Piece::Empty
+        {
+            moves.push(col + 32)
+        }
+        if !is_white
+            && row == 1
+            && self.board[col + 24] == Piece::Empty
+            && self.board[col + 16] == Piece::Empty
+        {
+            moves.push(col + 24)
+        }
+        // Check for capturing diagonally
+        if col > 0 {
+            let left_diagonal_pos = (forward_row as usize) * 8 + (col - 1);
+            if self.is_opponent_piece(self.board[left_diagonal_pos], self.board[position]) {
+                moves.push(left_diagonal_pos);
+            }
+        }
+        if col < 7 {
+            let right_diagonal_pos = (forward_row as usize) * 8 + (col + 1);
+            if self.is_opponent_piece(self.board[right_diagonal_pos], self.board[position]) {
+                moves.push(right_diagonal_pos);
+            }
+        }
+        moves
     }
 }
 
@@ -486,189 +549,6 @@ impl Piece {
         )
     }
 }
-
-// pub fn gen_moves_knight(index: usize, board_arr: &Vec<i32>, is_white: bool) -> Vec<usize> {
-//     let mut moves: Vec<usize> = Vec::new();
-//     if is_white {
-//         if index / 8 >= 2 {
-//             if index % 8 > 0 {
-//                 if board_arr[index - 17] <= 0 {
-//                     moves.push(index - 17);
-//                 }
-//             }
-//             if index % 8 < 7 {
-//                 if board_arr[index - 15] <= 0 {
-//                     moves.push(index - 15);
-//                 }
-//             }
-//         }
-//         if index / 8 < 6 {
-//             if index % 8 > 0 {
-//                 if board_arr[index + 15] <= 0 {
-//                     moves.push(index + 15);
-//                 }
-//             }
-//             if index % 8 < 7 {
-//                 if board_arr[index + 17] <= 0 {
-//                     moves.push(index + 17);
-//                 }
-//             }
-//         }
-//         if index % 8 >= 2 {
-//             if index / 8 > 0 {
-//                 if board_arr[index - 10] <= 0 {
-//                     moves.push(index - 10);
-//                 }
-//             }
-//             if index / 8 < 7 {
-//                 if board_arr[index + 6] <= 0 {
-//                     moves.push(index + 6);
-//                 }
-//             }
-//         }
-//         if index % 8 < 6 {
-//             if index / 8 > 0 {
-//                 if board_arr[index - 6] <= 0 {
-//                     moves.push(index - 6);
-//                 }
-//             }
-//             if index / 8 < 7 {
-//                 if board_arr[index + 10] <= 0 {
-//                     moves.push(index + 10);
-//                 }
-//             }
-//         }
-//     } else {
-//         if index / 8 >= 2 {
-//             if index % 8 > 0 {
-//                 if board_arr[index - 17] >= 0 {
-//                     moves.push(index - 17);
-//                 }
-//             }
-//             if index % 8 < 7 {
-//                 if board_arr[index - 15] >= 0 {
-//                     moves.push(index - 15);
-//                 }
-//             }
-//         }
-//         if index / 8 < 6 {
-//             if index % 8 > 0 {
-//                 if board_arr[index + 15] >= 0 {
-//                     moves.push(index + 15);
-//                 }
-//             }
-//             if index % 8 < 7 {
-//                 if board_arr[index + 17] >= 0 {
-//                     moves.push(index + 17);
-//                 }
-//             }
-//         }
-//         if index % 8 >= 2 {
-//             if index / 8 > 0 {
-//                 if board_arr[index - 10] >= 0 {
-//                     moves.push(index - 10);
-//                 }
-//             }
-//             if index / 8 < 7 {
-//                 if board_arr[index + 6] >= 0 {
-//                     moves.push(index + 6);
-//                 }
-//             }
-//         }
-//         if index % 8 < 6 {
-//             if index / 8 > 0 {
-//                 if board_arr[index - 6] >= 0 {
-//                     moves.push(index - 6);
-//                 }
-//             }
-//             if index / 8 < 7 {
-//                 if board_arr[index + 10] >= 0 {
-//                     moves.push(index + 10);
-//                 }
-//             }
-//         }
-//     }
-//     return moves;
-// }
-
-// pub fn gen_moves_pawn(
-//     index: usize,
-//     board_arr: &Vec<i32>,
-//     is_white: bool,
-//     last: &Vec<i32>,
-//     test_check: bool,
-// ) -> Vec<usize> {
-//     //add en passant
-//     let mut moves: Vec<usize> = Vec::new();
-//     if is_white {
-//         if board_arr[index - 8] == 0 && !test_check {
-//             moves.push(index - 8);
-//         }
-//         if index % 8 != 7 && board_arr[index - 7] < 0 {
-//             moves.push(index - 7);
-//         }
-//         if index % 8 != 0 && board_arr[index - 9] < 0 {
-//             moves.push(index - 9);
-//         }
-//         if index / 8 == 6 {
-//             if board_arr[index - 16] == 0 && board_arr[index - 8] == 0 && !test_check {
-//                 moves.push(index - 16);
-//             }
-//         }
-//         if index >= 24 && index < 32 && !test_check {
-//             if index % 8 != 0
-//                 && board_arr[index - 17] == 0
-//                 && last[index - 17] == -6
-//                 && board_arr[index - 1] == -6
-//                 && last[index - 1] != -6
-//             {
-//                 moves.push(index - 9);
-//             }
-//             if index % 8 != 7
-//                 && board_arr[index - 15] == 0
-//                 && last[index - 15] == -6
-//                 && board_arr[index + 1] == -6
-//                 && last[index + 1] != -6
-//             {
-//                 moves.push(index - 7);
-//             }
-//         }
-//     } else {
-//         if board_arr[index + 8] == 0 && !test_check {
-//             moves.push(index + 8);
-//         }
-//         if index % 8 != 0 && board_arr[index + 7] > 0 {
-//             moves.push(index + 7);
-//         }
-//         if index % 8 != 7 && board_arr[index + 9] > 0 {
-//             moves.push(index + 9);
-//         }
-//         if index / 8 == 1 {
-//             if board_arr[index + 16] == 0 && board_arr[index + 8] == 0 && !test_check {
-//                 moves.push(index + 16);
-//             }
-//         }
-//         if index >= 32 && index < 40 && !test_check {
-//             if index % 8 != 7
-//                 && board_arr[index + 17] == 0
-//                 && last[index + 17] == 6
-//                 && board_arr[index + 1] == 6
-//                 && last[index + 1] != 6
-//             {
-//                 moves.push(index + 9);
-//             }
-//             if index % 8 != 0
-//                 && board_arr[index + 15] == 0
-//                 && last[index + 15] == 6
-//                 && board_arr[index - 1] == 6
-//                 && last[index - 1] != 6
-//             {
-//                 moves.push(index + 7);
-//             }
-//         }
-//     }
-//     return moves;
-// }
 
 // pub fn is_stalemate(
 //     board_arr: Vec<i32>,

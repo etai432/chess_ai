@@ -1,5 +1,6 @@
+mod ai;
 mod chess;
-use chess::Chess;
+use ai::GameManager;
 use macroquad::prelude::*;
 
 pub fn window_conf() -> Conf {
@@ -14,17 +15,18 @@ pub fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut chess = Chess::new();
+    let mut game = GameManager::new();
     loop {
-        chess.draw();
+        game.chess.draw();
         if is_mouse_button_pressed(MouseButton::Left) {
-            chess.get_mouse_pos();
-            chess.player_turn(chess.is_white_turn).await;
-            chess.is_white_turn = !chess.is_white_turn;
+            game.get_mouse_pos();
+            game.player_turn().await;
+            // chess.ai_turn();
         }
         next_frame().await;
     }
 }
 
 //todo:
-//pawns, knights, en passant, castling (including rooks coming back to place), turns, game endings
+//chess: en passant, game endings
+//ai: ai turn
