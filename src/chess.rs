@@ -2,7 +2,6 @@ use macroquad::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct Chess {
-    textures: [Texture2D; 13],
     pub board: [Piece; 64],
     pub moves: Vec<usize>,
     casting: [bool; 4], //white, white long, black, black long
@@ -42,92 +41,11 @@ impl Chess {
             .skip(48)
             .for_each(|piece| *piece = Piece::Wpawn);
         Chess {
-            textures: [
-                Texture2D::from_file_with_format(include_bytes!(r".\images\board.png"), None),
-                Texture2D::from_file_with_format(include_bytes!(r".\images\white_king.png"), None),
-                Texture2D::from_file_with_format(include_bytes!(r".\images\white_queen.png"), None),
-                Texture2D::from_file_with_format(include_bytes!(r".\images\white_rook.png"), None),
-                Texture2D::from_file_with_format(
-                    include_bytes!(r".\images\white_bishop.png"),
-                    None,
-                ),
-                Texture2D::from_file_with_format(
-                    include_bytes!(r".\images\white_knight.png"),
-                    None,
-                ),
-                Texture2D::from_file_with_format(include_bytes!(r".\images\white_pawn.png"), None),
-                Texture2D::from_file_with_format(include_bytes!(r".\images\black_king.png"), None),
-                Texture2D::from_file_with_format(include_bytes!(r".\images\black_queen.png"), None),
-                Texture2D::from_file_with_format(include_bytes!(r".\images\black_rook.png"), None),
-                Texture2D::from_file_with_format(
-                    include_bytes!(r".\images\black_bishop.png"),
-                    None,
-                ),
-                Texture2D::from_file_with_format(
-                    include_bytes!(r".\images\black_knight.png"),
-                    None,
-                ),
-                Texture2D::from_file_with_format(include_bytes!(r".\images\black_pawn.png"), None),
-            ],
             board,
             moves: Vec::new(),
             casting: [true; 4],
             en_passant: 65,
             is_white_turn: true,
-        }
-    }
-    pub fn draw(&self) {
-        draw_texture(self.textures[0], 0.0, 0.0, WHITE);
-        for (i, piece) in self.board.iter().enumerate() {
-            let row = i / 8;
-            let col = i % 8;
-            let x = col as f32 * 100.0;
-            let y = row as f32 * 100.0;
-            match piece {
-                Piece::Wking => draw_texture(self.textures[1], x, y, WHITE),
-                Piece::Wqueen => draw_texture(self.textures[2], x, y, WHITE),
-                Piece::Wrook => draw_texture(self.textures[3], x, y, WHITE),
-                Piece::Wbishop => draw_texture(self.textures[4], x, y, WHITE),
-                Piece::Wknight => draw_texture(self.textures[5], x, y, WHITE),
-                Piece::Wpawn => draw_texture(self.textures[6], x, y, WHITE),
-                Piece::Bking => draw_texture(self.textures[7], x, y, WHITE),
-                Piece::Bqueen => draw_texture(self.textures[8], x, y, WHITE),
-                Piece::Brook => draw_texture(self.textures[9], x, y, WHITE),
-                Piece::Bbishop => draw_texture(self.textures[10], x, y, WHITE),
-                Piece::Bknight => draw_texture(self.textures[11], x, y, WHITE),
-                Piece::Bpawn => draw_texture(self.textures[12], x, y, WHITE),
-                Piece::Empty => (),
-            }
-        }
-    }
-    pub fn draw_moves(&self) {
-        for i in self.moves.clone() {
-            if self.board[i] == Piece::Empty {
-                draw_circle(
-                    50.0 + (i % 8 * 100) as f32,
-                    50.0 + (i / 8 * 100) as f32,
-                    20.0,
-                    Color {
-                        r: 0.4,
-                        g: 0.4,
-                        b: 0.4,
-                        a: 0.5,
-                    },
-                );
-            } else {
-                draw_circle_lines(
-                    50.0 + (i % 8 * 100) as f32,
-                    50.0 + (i / 8 * 100) as f32,
-                    49.0,
-                    7.0,
-                    Color {
-                        r: 0.4,
-                        g: 0.4,
-                        b: 0.4,
-                        a: 0.5,
-                    },
-                );
-            }
         }
     }
     fn is_opponent_piece(&self, piece1: Piece, piece2: Piece) -> bool {
@@ -549,48 +467,3 @@ impl Piece {
         )
     }
 }
-
-// pub fn is_stalemate(
-//     board_arr: Vec<i32>,
-//     is_white: bool,
-//     last: &Vec<i32>,
-//     tup: (bool, bool, bool, bool),
-// ) -> bool {
-//     let index = king_index(is_white, &board_arr);
-//     if gen_moves(index, &board_arr, last, tup).is_empty() {
-//         let mut moves: Vec<usize>;
-//         if is_white {
-//             for i in 0..64 {
-//                 if board_arr[i] >= 1 {
-//                     moves = gen_moves(i, &board_arr, last, tup);
-//                     if moves.len() > 0 {
-//                         return false;
-//                     }
-//                 }
-//             }
-//             return true;
-//         } else {
-//             for i in 0..64 {
-//                 if board_arr[i] <= -1 {
-//                     moves = gen_moves(i, &board_arr, last, tup);
-//                     if moves.len() > 0 {
-//                         return false;
-//                     }
-//                 }
-//             }
-//             return true;
-//         }
-//     }
-//     return false;
-// }
-
-// pub fn is_checkmate(
-//     board_arr: Vec<i32>,
-//     is_white: bool,
-//     last: &Vec<i32>,
-//     tup: (bool, bool, bool, bool),
-// ) -> bool {
-//     let index = king_index(is_white, &board_arr);
-//     return is_check(&board_arr, is_white, last, index)
-//         && is_stalemate(board_arr, is_white, last, tup);
-// }
