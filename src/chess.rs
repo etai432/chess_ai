@@ -44,7 +44,7 @@ impl Chess {
             board,
             moves: Vec::new(),
             casting: [true; 4],
-            en_passant: 65,
+            en_passant: 64,
             is_white_turn: true,
         }
     }
@@ -101,6 +101,7 @@ impl Chess {
     pub fn move_piece(&mut self, from: usize, to: usize, apply_castling: bool) {
         let piece = self.board[from];
         if apply_castling {
+            self.en_passant = 64;
             match piece {
                 Piece::Bking => {
                     self.casting[2] = false;
@@ -124,6 +125,16 @@ impl Chess {
                         self.casting[1] = false;
                     }
                 }
+                Piece::Wpawn => {
+                    if from - to == 16 {
+                        self.en_passant = to + 8;
+                    }
+                }
+                Piece::Bpawn => {
+                    if to - from == 16 {
+                        self.en_passant = to - 8;
+                    }
+                }
                 _ => (),
             }
         }
@@ -131,12 +142,18 @@ impl Chess {
         if let Piece::Wpawn = piece {
             if to < 8 {
                 self.board[to] = Piece::Wqueen;
+            } else if from - to == 7 || from - to == 9 {
+                self.board[to + 8] = Piece::Empty;
+                self.board[to] = piece;
             } else {
                 self.board[to] = piece;
             }
         } else if let Piece::Bpawn = piece {
             if to >= 56 {
                 self.board[to] = Piece::Bqueen;
+            } else if to - from == 7 || to - from == 9 {
+                self.board[to - 8] = Piece::Empty;
+                self.board[to] = piece;
             } else {
                 self.board[to] = piece;
             }
@@ -422,15 +439,21 @@ impl Chess {
         }
         // Check for capturing diagonally
         if col > 0 {
-            let left_diagonal_pos = (forward_row as usize) * 8 + (col - 1);
-            if self.is_opponent_piece(self.board[left_diagonal_pos], self.board[position]) {
-                moves.push(left_diagonal_pos);
+            let left_dia_pos = (forward_row as usize) * 8 + (col - 1);
+            if self.is_opponent_piece(self.board[left_dia_pos], self.board[position]) {
+                moves.push(left_dia_pos);
+            }
+            if self.board[left_dia_pos] == Piece::Empty && self.en_passant == left_dia_pos {
+                moves.push(left_dia_pos);
             }
         }
         if col < 7 {
-            let right_diagonal_pos = (forward_row as usize) * 8 + (col + 1);
-            if self.is_opponent_piece(self.board[right_diagonal_pos], self.board[position]) {
-                moves.push(right_diagonal_pos);
+            let right_dia_pos = (forward_row as usize) * 8 + (col + 1);
+            if self.is_opponent_piece(self.board[right_dia_pos], self.board[position]) {
+                moves.push(right_dia_pos);
+            }
+            if self.board[right_dia_pos] == Piece::Empty && self.en_passant == right_dia_pos {
+                moves.push(right_dia_pos);
             }
         }
         moves

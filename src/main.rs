@@ -10,6 +10,7 @@ pub fn window_conf() -> Conf {
         window_height: 800,
         window_width: 800,
         window_resizable: false,
+        // fullscreen: true,
         ..Default::default()
     }
 }
@@ -29,5 +30,7 @@ async fn main() {
 }
 
 //todo:
-//chess: en passant, game endings
-//ai: ai turn
+//chess: done for now
+//ai: best move
+//game: ai turn, game endings: Checkmate, Stalemate, Draw by Insufficient Material, Draw by Threefold Repetition, Draw by Fifty-Move Rule, Draw by Agreement, Resignation, Time Forfeit
+//graphics: make game full screen and make the expirience better, pvp, pvai, time!
