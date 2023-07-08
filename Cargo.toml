@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 macroquad = "0.3"
+egui = "0.21.0"
+egui-macroquad = "0.15.0"

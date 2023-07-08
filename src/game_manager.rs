@@ -9,6 +9,7 @@ pub struct GameManager {
     chess: Chess,
     mouse_pos: usize,
     textures: [Texture2D; 13],
+    pos: (f32, f32),
 }
 
 impl GameManager {
@@ -44,15 +45,16 @@ impl GameManager {
                 ),
                 Texture2D::from_file_with_format(include_bytes!(r".\images\black_pawn.png"), None),
             ],
+            pos: (100.0, 200.0),
         }
     }
     pub fn draw(&self) {
-        draw_texture(self.textures[0], 0.0, 0.0, WHITE);
+        draw_texture(self.textures[0], self.pos.0, self.pos.1, WHITE);
         for (i, piece) in self.chess.board.iter().enumerate() {
             let row = i / 8;
             let col = i % 8;
-            let x = col as f32 * 100.0;
-            let y = row as f32 * 100.0;
+            let x = col as f32 * 100.0 + self.pos.0;
+            let y = row as f32 * 100.0 + self.pos.1;
             match piece {
                 Piece::Wking => draw_texture(self.textures[1], x, y, WHITE),
                 Piece::Wqueen => draw_texture(self.textures[2], x, y, WHITE),
@@ -69,13 +71,34 @@ impl GameManager {
                 Piece::Empty => (),
             }
         }
+        let mut menu = 0;
+        egui_macroquad::ui(|egui_ctx| {
+            egui::Window::new("menu")
+                .fixed_pos(egui::Pos2::new(0.0, 0.0))
+                .show(egui_ctx, |ui| {
+                    ui.label("Test");
+                    if ui.button("gravity").clicked() {
+                        menu = 1;
+                    }
+                    if ui.button("spawn objects").clicked() {
+                        menu = 2;
+                    }
+                    if ui.button("color selector").clicked() {
+                        menu = 3;
+                    }
+                    if ui.button("bounciness selector").clicked() {
+                        menu = 4;
+                    }
+                });
+        });
+        egui_macroquad::draw();
     }
     pub fn draw_moves(&self) {
         for i in self.chess.moves.clone() {
             if self.chess.board[i] == Piece::Empty {
                 draw_circle(
-                    50.0 + (i % 8 * 100) as f32,
-                    50.0 + (i / 8 * 100) as f32,
+                    50.0 + (i % 8 * 100) as f32 + self.pos.0,
+                    50.0 + (i / 8 * 100) as f32 + self.pos.1,
                     20.0,
                     Color {
                         r: 0.4,
@@ -86,8 +109,8 @@ impl GameManager {
                 );
             } else {
                 draw_circle_lines(
-                    50.0 + (i % 8 * 100) as f32,
-                    50.0 + (i / 8 * 100) as f32,
+                    50.0 + (i % 8 * 100) as f32 + self.pos.0,
+                    50.0 + (i / 8 * 100) as f32 + self.pos.1,
                     49.0,
                     7.0,
                     Color {
@@ -102,18 +125,25 @@ impl GameManager {
     }
     pub fn get_mouse_pos(&mut self) {
         let mouse_pos = mouse_position();
-        if mouse_pos.0 as usize / 100 + mouse_pos.1 as usize / 100 * 8 > 63 {
-            self.mouse_pos = 63;
+        if mouse_pos.0 > self.pos.0
+            && mouse_pos.0 < self.pos.0 + 800.0
+            && mouse_pos.1 > self.pos.1
+            && mouse_pos.1 < self.pos.1 + 800.0
+        {
+            self.mouse_pos = (mouse_pos.0 - self.pos.0) as usize / 100
+                + (mouse_pos.1 - self.pos.1) as usize / 100 * 8;
         }
-        self.mouse_pos = mouse_pos.0 as usize / 100 + mouse_pos.1 as usize / 100 * 8;
     }
     pub async fn player_turn(&mut self) {
+        self.chess.moves = vec![];
         loop {
             self.draw();
             self.draw_moves();
             next_frame().await;
             thread::sleep(Duration::from_millis(100));
-            if self.chess.board[self.mouse_pos].is_white() == self.chess.is_white_turn {
+            if (0..64).contains(&self.mouse_pos)
+                && self.chess.board[self.mouse_pos].is_white() == self.chess.is_white_turn
+            {
                 let piece_index = self.mouse_pos;
                 self.chess.get_legals(piece_index);
                 while !is_mouse_button_pressed(MouseButton::Left) {
@@ -141,8 +171,36 @@ impl GameManager {
     }
     pub fn ai_turn(&mut self) {
         self.ai.best_move();
-        //find best move, make the move, possible time limit?
+        //find best move, make the move, possible time limit (would be epic (maybe just quit after x time))?
         //this function is not related to the graphics but makes the move and returns nothing
-        // self.chess.is_white_turn = !self.chess.is_white_turn;
+        self.chess.is_white_turn = !self.chess.is_white_turn;
+    }
+    pub fn is_ending(&mut self) -> i32 {
+        if !self.has_moves() {
+            if self.chess.is_check() {
+                if self.chess.is_white_turn {
+                    println!("black checkmate");
+                    return -1;
+                } else {
+                    println!("white checkmate");
+                    return 1;
+                }
+            } else {
+                println!("stalemate");
+                return 0;
+            }
+        }
+        2
+    }
+    pub fn has_moves(&mut self) -> bool {
+        for (i, p) in self.chess.board.into_iter().enumerate() {
+            if p.is_white() == self.chess.is_white_turn {
+                self.chess.get_legals(i);
+                if !self.chess.moves.is_empty() {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
