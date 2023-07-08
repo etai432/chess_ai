@@ -22,7 +22,7 @@ async fn main() {
 }
 
 async fn pvp() {
-    let mut game = GameManager::new();
+    let mut game = GameManager::new(0, None);
     loop {
         game.draw();
         if is_mouse_button_pressed(MouseButton::Left) {
@@ -35,7 +35,7 @@ async fn pvp() {
 }
 
 async fn pvai() {
-    let mut game = GameManager::new();
+    let mut game = GameManager::new(0, None);
     loop {
         game.draw();
         if is_mouse_button_pressed(MouseButton::Left) {
@@ -50,44 +50,11 @@ async fn pvai() {
 //todo:
 //chess: done for now
 //ai: best move
-//game: ai turn, game endings: Checkmate, Stalemate, Draw by Insufficient Material, Draw by Threefold Repetition, Draw by Fifty-Move Rule, Draw by Agreement, Resignation, Time Forfeit
+//game:
+//ai turn (after ai)
+//game endings: Draw by Insufficient Material, Draw by Threefold Repetition, Draw by Fifty-Move Rule, Draw by Agreement, Resignation, Time Forfeit (also make them useful in a game)
+//make timers functional
 //graphics:
-//make a menu: pvp, pvai
+//make a menu: pvp, pvai, timers
 //make a game title that indicates whos turn it is and the winner
-//make time clocks and ai thinking time using egui
-//crown for the winner
-
-//simple timer using egui
-// struct Timer {
-//     start_time: std::time::Instant,
-// }
-// impl Timer {
-//     fn new() -> Self {
-//         Self {
-//             start_time: std::time::Instant::now(),
-//         }
-//     }
-//     fn get_elapsed_time(&self) -> std::time::Duration {
-//         self.start_time.elapsed()
-//     }
-//     fn reset(&mut self) {
-//         self.start_time = std::time::Instant::now();
-//     }
-// }
-// let mut timer = Timer::new();
-// loop {
-//     egui_macroquad::ui(|egui_ctx| {
-//         egui::Window::new("Timer").show(egui_ctx, |ui| {
-//             ui.horizontal(|ui| {
-//                 let elapsed_time = timer.get_elapsed_time();
-//                 let elapsed_seconds = elapsed_time.as_secs();
-//                 ui.label(format!("Elapsed Time: {} seconds", elapsed_seconds));
-//                 if ui.button("Reset").clicked() {
-//                     timer.reset();
-//                 }
-//             });
-//         });
-//     });
-//     egui_macroquad::draw();
-//     next_frame().await;
-// }
+//crown for the winner (funny little bonus)
