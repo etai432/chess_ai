@@ -1,25 +1,24 @@
 use crate::ai::AI;
 use crate::chess::{Chess, Piece};
 use macroquad::prelude::*;
-use std::borrow::Borrow;
 use std::thread;
 use std::time::Duration;
 
 pub struct GameManager {
     ai: AI,
     chess: Chess,
-    mouse_pos: usize,
+    mouse_pos: Option<usize>,
     textures: [Texture2D; 13],
     pos: (f32, f32),
     timer: Timer,
 }
 
 impl GameManager {
-    pub fn new(start: u64, add: Option<u64>) -> Self {
-        GameManager {
-            ai: AI::new(),
+    pub fn new(start: f32, add: f32, ai_time: Option<f32>) -> Self {
+        let g = GameManager {
+            ai: AI::new(ai_time.unwrap_or(0.0)),
             chess: Chess::new(),
-            mouse_pos: 0,
+            mouse_pos: None,
             textures: [
                 Texture2D::from_file_with_format(include_bytes!(r".\images\board.png"), None),
                 Texture2D::from_file_with_format(include_bytes!(r".\images\white_king.png"), None),
@@ -49,7 +48,11 @@ impl GameManager {
             ],
             pos: (100.0, 200.0),
             timer: Timer::new(start, add),
+        };
+        if ai_time.is_some() {
+            //change players timer to ...
         }
+        g
     }
     pub fn draw(&self) {
         draw_texture(self.textures[0], self.pos.0, self.pos.1, WHITE);
@@ -76,29 +79,15 @@ impl GameManager {
         }
         let window_width = screen_width();
         let window_height = screen_height();
-
         let outer_width = 600.0;
         let outer_height = 400.0;
         let outer_margin = 300.0;
         let inner_margin = 20.0;
-        let timer_font_size = 200.0;
-
         let outer_x = window_width - outer_width - outer_margin;
         let outer_y = (window_height - outer_height) / 2.0 + 60.0;
-
         let inner_width = outer_width - inner_margin * 2.0;
         let inner_height = (outer_height - inner_margin * 3.0) / 2.0;
-
-        let white_timer_x = outer_x + inner_margin + 50.0;
-        let white_timer_y =
-            outer_y + inner_margin + inner_height / 2.0 - timer_font_size / 3.0 + 80.0;
-
-        let black_timer_x = outer_x + inner_margin + 50.0;
-        let black_timer_y =
-            outer_y + inner_margin + inner_height + inner_margin + inner_height / 2.0
-                - timer_font_size / 3.0
-                + 80.0;
-
+        let timer_x = outer_x + inner_margin + 50.0;
         // Draw outer rectangles
         draw_rectangle(
             window_width - outer_width - outer_margin,
@@ -125,45 +114,29 @@ impl GameManager {
             inner_height,
             WHITE,
         );
-
-        // Draw timer texts
-        let white_minutes = self.timer.time_white as u32 / 60;
-        let white_seconds = self.timer.time_white as u32 % 60;
-        let white_time = format!("{:02}:{:02}", white_minutes, white_seconds);
-
-        let black_minutes = self.timer.time_black as u32 / 60;
-        let black_seconds = self.timer.time_black as u32 % 60;
-        let black_time = format!("{:02}:{:02}", black_minutes, black_seconds);
-
-        let white_text_width = white_time.len() as f32 * timer_font_size * 0.6;
-        let white_text_x = white_timer_x + (inner_width - white_text_width) / 2.0;
-
-        let black_text_width = black_time.len() as f32 * timer_font_size * 0.6;
-        let black_text_x = black_timer_x + (inner_width - black_text_width) / 2.0;
-
         draw_text(
-            &white_time,
-            white_text_x + 30.0,
-            white_timer_y + 30.0,
-            timer_font_size,
+            &format!(
+                "{:02}:{:02}",
+                self.timer.time_black as u32 / 60,
+                self.timer.time_black as u32 % 60
+            ),
+            timer_x + (inner_width - 5.0 * 120.0) / 2.0 + 30.0,
+            outer_y + inner_margin + inner_height / 2.0 - 200.0 / 3.0 + 110.0,
+            200.0,
             WHITE,
         );
         draw_text(
-            &black_time,
-            black_text_x + 30.0,
-            black_timer_y + 30.0,
-            timer_font_size,
+            &format!(
+                "{:02}:{:02}",
+                self.timer.time_white as u32 / 60,
+                self.timer.time_white as u32 % 60
+            ),
+            timer_x + (inner_width - 5.0 * 120.0) / 2.0 + 30.0,
+            outer_y + inner_margin + inner_height + inner_margin + inner_height / 2.0 - 200.0 / 3.0
+                + 110.0,
+            200.0,
             BLACK,
         );
-
-        // egui_macroquad::ui(|egui_ctx| {
-        //     egui::Window::new("menu")
-        //         .fixed_pos(egui::Pos2::new(0.0, 0.0))
-        //         .show(egui_ctx, |ui| {
-        //             //ui code goes here
-        //         });
-        // });
-        // egui_macroquad::draw();
     }
     pub fn draw_moves(&self) {
         for i in self.chess.moves.clone() {
@@ -202,8 +175,12 @@ impl GameManager {
             && mouse_pos.1 > self.pos.1
             && mouse_pos.1 < self.pos.1 + 800.0
         {
-            self.mouse_pos = (mouse_pos.0 - self.pos.0) as usize / 100
-                + (mouse_pos.1 - self.pos.1) as usize / 100 * 8;
+            self.mouse_pos = Some(
+                (mouse_pos.0 - self.pos.0) as usize / 100
+                    + (mouse_pos.1 - self.pos.1) as usize / 100 * 8,
+            );
+        } else {
+            self.mouse_pos = None;
         }
     }
     pub async fn player_turn(&mut self) {
@@ -213,24 +190,36 @@ impl GameManager {
             self.draw_moves();
             next_frame().await;
             thread::sleep(Duration::from_millis(100));
-            if (0..64).contains(&self.mouse_pos)
-                && self.chess.board[self.mouse_pos].is_white() == self.chess.is_white_turn
-            {
-                let piece_index = self.mouse_pos;
-                self.chess.get_legals(piece_index);
-                while !is_mouse_button_pressed(MouseButton::Left) {
-                    self.draw();
-                    self.draw_moves();
-                    next_frame().await;
-                }
-                self.get_mouse_pos();
-                if self.chess.moves.contains(&self.mouse_pos) {
-                    self.chess.move_piece(piece_index, self.mouse_pos, true);
+            if let Some(x) = self.mouse_pos {
+                if (0..64).contains(&x)
+                    && self.chess.board[x].is_white() == self.chess.is_white_turn
+                {
+                    let piece_index = x;
+                    self.chess.get_legals(piece_index);
+                    while !is_mouse_button_pressed(MouseButton::Left) {
+                        self.draw();
+                        self.draw_moves();
+                        next_frame().await;
+                    }
+                    self.get_mouse_pos();
+                    if self.mouse_pos.is_some()
+                        && self.chess.moves.contains(&self.mouse_pos.unwrap())
+                    {
+                        self.chess
+                            .move_piece(piece_index, self.mouse_pos.unwrap(), true);
+                        self.chess.moves = vec![];
+                        break;
+                    }
+                } else {
                     self.chess.moves = vec![];
-                    break;
+                    while !is_mouse_button_pressed(MouseButton::Left) {
+                        self.draw();
+                        self.draw_moves();
+                        next_frame().await;
+                    }
+                    self.get_mouse_pos();
                 }
             } else {
-                self.chess.moves = vec![];
                 while !is_mouse_button_pressed(MouseButton::Left) {
                     self.draw();
                     self.draw_moves();
@@ -238,6 +227,11 @@ impl GameManager {
                 }
                 self.get_mouse_pos();
             }
+        }
+        if self.chess.is_white_turn {
+            self.timer.update_white();
+        } else {
+            self.timer.update_black();
         }
         self.chess.is_white_turn = !self.chess.is_white_turn;
     }
@@ -258,9 +252,19 @@ impl GameManager {
                     return 1;
                 }
             } else {
-                println!("stalemate");
+                println!("Stalemate");
                 return 0;
             }
+        }
+        if self.chess.is_insufficient_material() {
+            println!("Draw by Insufficient Material");
+            return 3;
+        } else if self.chess.is_threefold_repetition() {
+            println!("Draw by Threefold Repetition");
+            return 4;
+        } else if self.chess.is_fifty_move_rule() {
+            println!("Draw by Fifty-Move Rule");
+            return 5;
         }
         2
     }
@@ -279,12 +283,12 @@ impl GameManager {
 
 struct Timer {
     start_time: std::time::Instant,
-    time_white: u64,
-    time_black: u64,
-    add: Option<u64>,
+    time_white: f32,
+    time_black: f32,
+    add: f32,
 }
 impl Timer {
-    fn new(start_time: u64, add: Option<u64>) -> Self {
+    fn new(start_time: f32, add: f32) -> Self {
         Self {
             start_time: std::time::Instant::now(),
             time_white: start_time,
@@ -293,13 +297,13 @@ impl Timer {
         }
     }
     fn update_white(&mut self) {
-        self.time_white -= self.start_time.elapsed().as_secs();
-        self.time_white += self.add.unwrap_or(0);
+        self.time_white -= self.start_time.elapsed().as_secs() as f32;
+        self.time_white += self.add;
         self.reset();
     }
     fn update_black(&mut self) {
-        self.time_black -= self.start_time.elapsed().as_secs();
-        self.time_black += self.add.unwrap_or(0);
+        self.time_black -= self.start_time.elapsed().as_secs() as f32;
+        self.time_black += self.add;
         self.reset();
     }
     fn reset(&mut self) {

@@ -458,6 +458,25 @@ impl Chess {
         }
         moves
     }
+    pub fn is_insufficient_material(&self) -> bool {
+        // Implement your logic to check for insufficient material here
+        // Return true if the game is in a draw due to insufficient material
+        false
+    }
+
+    // Check for threefold repetition
+    pub fn is_threefold_repetition(&self) -> bool {
+        // Implement your logic to check for threefold repetition here
+        // Return true if the game is in a draw due to threefold repetition
+        false
+    }
+
+    // Check for fifty-move rule
+    pub fn is_fifty_move_rule(&self) -> bool {
+        // Implement your logic to check for the fifty-move rule here
+        // Return true if the game is in a draw due to the fifty-move rule
+        false
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
