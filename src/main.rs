@@ -1,7 +1,6 @@
 mod ai;
 mod chess;
 mod game_manager;
-
 use game_manager::GameManager;
 use macroquad::prelude::*;
 
@@ -26,7 +25,7 @@ async fn menu() {
     let mut blackwhite = BlackWhite::Random;
     let mut time: f32 = 300.0;
     let mut additional_time_per_move: f32 = 2.0;
-    let mut time_per_move_ai: f32 = 10.0;
+    let mut depth_ai = 4;
     let button_width = 400.0;
     let button_height = 200.0;
     let button_pos = egui::Pos2::new(
@@ -117,14 +116,13 @@ async fn menu() {
                             .color(egui::Color32::GREEN),
                     );
                     ui.label(
-                        egui::RichText::new("Time per Move (AI) (seconds):")
+                        egui::RichText::new("Depth (AI):")
                             .heading()
                             .color(egui::Color32::LIGHT_BLUE),
                     );
                     ui.add(
-                        egui::Slider::new(&mut time_per_move_ai, 10.0..=100.0)
+                        egui::Slider::new(&mut depth_ai, 2..=4)
                             .text("")
-                            .suffix("ms")
                             .clamp_to_range(true),
                     );
                 }
@@ -157,7 +155,7 @@ async fn menu() {
                 pvp(time, additional_time_per_move).await;
                 return;
             } else {
-                pvai(time, additional_time_per_move, blackwhite, time_per_move_ai).await;
+                pvai(time, additional_time_per_move, blackwhite, depth_ai).await;
                 return;
             }
         }
@@ -169,21 +167,30 @@ async fn menu() {
 async fn pvp(game_time: f32, additional: f32) {
     clear_background(BLACK);
     let mut game = GameManager::new(game_time, additional, None);
-    loop {
+    while game.is_ending() == 2 {
         game.draw();
         if is_mouse_button_pressed(MouseButton::Left) {
             game.get_mouse_pos();
             game.player_turn().await;
-            game.is_ending();
         }
         next_frame().await;
     }
 }
 
-async fn pvai(game_time: f32, additional: f32, player: BlackWhite, ai_time: f32) {
+async fn pvai(game_time: f32, additional: f32, mut player: BlackWhite, depth_ai: i32) {
     clear_background(BLACK);
-    let mut game = GameManager::new(game_time, additional, Some(ai_time));
-    loop {
+    let mut game = GameManager::new(game_time, additional, Some(depth_ai));
+    if player == BlackWhite::Random {
+        player = if rand::gen_range(0, 1) == 0 {
+            BlackWhite::White
+        } else {
+            BlackWhite::Black
+        };
+    }
+    if player == BlackWhite::Black {
+        game.ai_turn();
+    }
+    while game.is_ending() == 2 {
         game.draw();
         if is_mouse_button_pressed(MouseButton::Left) {
             game.get_mouse_pos();
@@ -218,9 +225,8 @@ enum Pv {
 //crown for the winner (funny little bonus)
 
 //todo list:
-//game endings
 //title
 //pieces in menu
-//ai
-//ai timer
+//game endings- should prob be handled by the game manager
+//better ai
 //crown

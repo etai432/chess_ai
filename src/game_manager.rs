@@ -14,9 +14,9 @@ pub struct GameManager {
 }
 
 impl GameManager {
-    pub fn new(start: f32, add: f32, ai_time: Option<f32>) -> Self {
+    pub fn new(start: f32, add: f32, ai_time: Option<i32>) -> Self {
         let g = GameManager {
-            ai: AI::new(ai_time.unwrap_or(0.0)),
+            ai: AI::new(ai_time.unwrap_or(1)),
             chess: Chess::new(),
             mouse_pos: None,
             textures: [
@@ -205,8 +205,7 @@ impl GameManager {
                     if self.mouse_pos.is_some()
                         && self.chess.moves.contains(&self.mouse_pos.unwrap())
                     {
-                        self.chess
-                            .move_piece(piece_index, self.mouse_pos.unwrap(), true);
+                        self.chess.move_piece(piece_index, self.mouse_pos.unwrap());
                         self.chess.moves = vec![];
                         break;
                     }
@@ -229,21 +228,23 @@ impl GameManager {
             }
         }
         if self.chess.is_white_turn {
-            self.timer.update_white();
-        } else {
             self.timer.update_black();
+        } else {
+            self.timer.update_white();
         }
-        self.chess.is_white_turn = !self.chess.is_white_turn;
     }
     pub fn ai_turn(&mut self) {
-        self.ai.best_move();
-        //find best move, make the move, possible time limit (would be epic (maybe just quit after x time))?
-        //this function is not related to the graphics but makes the move and returns nothing
-        self.chess.is_white_turn = !self.chess.is_white_turn;
+        let (from, to) = self.ai.best_move(self.chess.clone());
+        self.chess.move_piece(from, to);
+        if self.chess.is_white_turn {
+            self.timer.update_black();
+        } else {
+            self.timer.update_white();
+        }
     }
     pub fn is_ending(&mut self) -> i32 {
         if !self.has_moves() {
-            if self.chess.is_check() {
+            if self.chess.is_check(self.chess.king_loc()) {
                 if self.chess.is_white_turn {
                     println!("black checkmate");
                     return -1;
@@ -262,9 +263,6 @@ impl GameManager {
         } else if self.chess.is_threefold_repetition() {
             println!("Draw by Threefold Repetition");
             return 4;
-        } else if self.chess.is_fifty_move_rule() {
-            println!("Draw by Fifty-Move Rule");
-            return 5;
         }
         2
     }

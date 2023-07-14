@@ -1,12 +1,17 @@
 use macroquad::prelude::*;
+use std::default::Default;
 
 #[derive(Debug, Clone)]
 pub struct Chess {
     pub board: [Piece; 64],
     pub moves: Vec<usize>,
-    casting: [bool; 4], //white, white long, black, black long
-    en_passant: usize,
+    pub castling: [bool; 4], //white, white long, black, black long
+    pub en_passant: usize,
     pub is_white_turn: bool,
+    last_board: [Piece; 64],
+    last_castling: [bool; 4],
+    last_en_passant: usize,
+    last_turn: bool,
 }
 
 impl Chess {
@@ -43,9 +48,13 @@ impl Chess {
         Chess {
             board,
             moves: Vec::new(),
-            casting: [true; 4],
+            castling: [true; 4],
             en_passant: 64,
             is_white_turn: true,
+            last_board: [Piece::Empty; 64],
+            last_castling: [true; 4],
+            last_en_passant: 64,
+            last_turn: true,
         }
     }
     fn is_opponent_piece(&self, piece1: Piece, piece2: Piece) -> bool {
@@ -55,28 +64,38 @@ impl Chess {
         piece1.is_white() != piece2.is_white()
     }
     pub fn is_legal(&mut self, from: usize, to: usize) -> bool {
-        let temp_board = self.board;
-        self.move_piece(from, to, false);
-        let check = !self.is_check();
-        self.board = temp_board;
+        self.move_piece(from, to);
+        self.is_white_turn = !self.is_white_turn;
+        let king = self.king_loc();
+        let check = !self.is_check(king);
+        self.undo_move(
+            self.last_board,
+            self.last_castling,
+            self.last_en_passant,
+            self.last_turn,
+        );
         check
     }
-    pub fn is_check(&mut self) -> bool {
+    pub fn king_loc(&self) -> usize {
         let king_piece = if self.is_white_turn {
             Piece::Wking
         } else {
             Piece::Bking
         };
-        let king = self
-            .board
+        self.board
             .iter()
             .position(|&piece| piece == king_piece)
-            .expect("couldnt find king position (wtf)");
+            .unwrap_or_else(|| {
+                println!("{:?} {:?}", self.board, king_piece);
+                panic!("king wasnt found (wtf)")
+            })
+    }
+    pub fn is_check(&mut self, king: usize) -> bool {
         let mut moves: Vec<usize>;
         if self.is_white_turn {
             for i in 0..64 {
                 if !self.board[i].is_white() {
-                    moves = self.gen_moves(i);
+                    moves = self.gen_moves(i, false);
                     for move1 in moves {
                         if move1 == king {
                             return true;
@@ -87,7 +106,7 @@ impl Chess {
         } else {
             for i in 0..64 {
                 if self.board[i].is_white() {
-                    moves = self.gen_moves(i);
+                    moves = self.gen_moves(i, false);
                     for move1 in moves {
                         if move1 == king {
                             return true;
@@ -98,65 +117,53 @@ impl Chess {
         }
         false
     }
-    pub fn move_piece(&mut self, from: usize, to: usize, apply_castling: bool) {
+    pub fn move_piece(&mut self, from: usize, to: usize) {
+        self.last_board = self.board;
+        self.last_castling = self.castling;
+        self.last_en_passant = self.en_passant;
+        self.last_turn = self.is_white_turn;
         let piece = self.board[from];
-        if apply_castling {
-            self.en_passant = 64;
-            match piece {
-                Piece::Bking => {
-                    self.casting[2] = false;
-                    self.casting[3] = false;
-                }
-                Piece::Wking => {
-                    self.casting[0] = false;
-                    self.casting[1] = false;
-                }
-                Piece::Brook => {
-                    if from == 7 {
-                        self.casting[2] = false;
-                    } else if from == 0 {
-                        self.casting[3] = false;
-                    }
-                }
-                Piece::Wrook => {
-                    if from == 63 {
-                        self.casting[0] = false;
-                    } else if from == 56 {
-                        self.casting[1] = false;
-                    }
-                }
-                Piece::Wpawn => {
-                    if from - to == 16 {
-                        self.en_passant = to + 8;
-                    }
-                }
-                Piece::Bpawn => {
-                    if to - from == 16 {
-                        self.en_passant = to - 8;
-                    }
-                }
-                _ => (),
+        self.en_passant = 64;
+        match piece {
+            Piece::Bking => {
+                self.castling[2] = false;
+                self.castling[3] = false;
             }
+            Piece::Wking => {
+                self.castling[0] = false;
+                self.castling[1] = false;
+            }
+            Piece::Brook => {
+                if from == 7 {
+                    self.castling[2] = false;
+                } else if from == 0 {
+                    self.castling[3] = false;
+                }
+            }
+            Piece::Wrook => {
+                if from == 63 {
+                    self.castling[0] = false;
+                } else if from == 56 {
+                    self.castling[1] = false;
+                }
+            }
+            Piece::Wpawn => {
+                if from - to == 16 {
+                    self.en_passant = to + 8;
+                }
+            }
+            Piece::Bpawn => {
+                if to - from == 16 {
+                    self.en_passant = to - 8;
+                }
+            }
+            _ => (),
         }
         self.board[from] = Piece::Empty;
-        if let Piece::Wpawn = piece {
-            if to < 8 {
-                self.board[to] = Piece::Wqueen;
-            } else if from - to == 7 || from - to == 9 {
-                self.board[to + 8] = Piece::Empty;
-                self.board[to] = piece;
-            } else {
-                self.board[to] = piece;
-            }
-        } else if let Piece::Bpawn = piece {
-            if to >= 56 {
-                self.board[to] = Piece::Bqueen;
-            } else if to - from == 7 || to - from == 9 {
-                self.board[to - 8] = Piece::Empty;
-                self.board[to] = piece;
-            } else {
-                self.board[to] = piece;
-            }
+        if piece == Piece::Wpawn && to < 8 {
+            self.board[to] = Piece::Wqueen;
+        } else if piece == Piece::Bpawn && to >= 56 {
+            self.board[to] = Piece::Bqueen;
         } else {
             self.board[to] = piece;
         }
@@ -192,10 +199,23 @@ impl Chess {
                 self.board[59] = Piece::Wrook;
             }
         }
+        self.is_white_turn = !self.is_white_turn;
     }
-    pub fn gen_moves(&mut self, index: usize) -> Vec<usize> {
+    pub fn undo_move(
+        &mut self,
+        board: [Piece; 64],
+        castling: [bool; 4],
+        en_passant: usize,
+        turn: bool,
+    ) {
+        self.board = board;
+        self.castling = castling;
+        self.en_passant = en_passant;
+        self.is_white_turn = turn;
+    }
+    pub fn gen_moves(&mut self, index: usize, castling: bool) -> Vec<usize> {
         match self.board[index] {
-            Piece::Wking | Piece::Bking => self.gen_moves_king(index),
+            Piece::Wking | Piece::Bking => self.gen_moves_king(index, castling),
             Piece::Wqueen | Piece::Bqueen => {
                 let mut moves = self.gen_moves_rook(index);
                 moves.extend(self.gen_moves_bishop(index));
@@ -210,13 +230,13 @@ impl Chess {
     }
     pub fn get_legals(&mut self, index: usize) {
         self.moves = self
-            .gen_moves(index)
+            .gen_moves(index, true)
             .iter()
             .filter(|&&move_index| self.is_legal(index, move_index))
             .cloned()
             .collect()
     }
-    fn gen_moves_king(&mut self, index: usize) -> Vec<usize> {
+    fn gen_moves_king(&mut self, index: usize, castling: bool) -> Vec<usize> {
         let mut moves = vec![];
         let piece = self.board[index];
         // Define the possible king moves in terms of row and column offsets
@@ -248,37 +268,51 @@ impl Chess {
                 }
             }
         }
-        if !piece.is_white() {
-            if self.casting[2]
-                && self.board[5] == Piece::Empty
-                && self.board[6] == Piece::Empty
-                && self.board[7] == Piece::Wrook
-            {
-                moves.push(6);
-            }
-            if self.casting[3]
-                && self.board[3] == Piece::Empty
-                && self.board[2] == Piece::Empty
-                && self.board[1] == Piece::Empty
-                && self.board[0] == Piece::Wrook
-            {
-                moves.push(2);
-            }
-        } else {
-            if self.casting[0]
-                && self.board[61] == Piece::Empty
-                && self.board[62] == Piece::Empty
-                && self.board[63] == Piece::Brook
-            {
-                moves.push(62);
-            }
-            if self.casting[1]
-                && self.board[59] == Piece::Empty
-                && self.board[58] == Piece::Empty
-                && self.board[57] == Piece::Empty
-                && self.board[56] == Piece::Brook
-            {
-                moves.push(58);
+        if castling {
+            if !piece.is_white() {
+                if self.castling[2]
+                    && self.board[5] == Piece::Empty
+                    && self.board[6] == Piece::Empty
+                    && self.board[7] == Piece::Brook
+                    && !self.is_check(4)
+                    && !self.is_check(5)
+                    && !self.is_check(6)
+                {
+                    moves.push(6);
+                }
+                if self.castling[3]
+                    && self.board[3] == Piece::Empty
+                    && self.board[2] == Piece::Empty
+                    && self.board[1] == Piece::Empty
+                    && self.board[0] == Piece::Brook
+                    && !self.is_check(4)
+                    && !self.is_check(3)
+                    && !self.is_check(2)
+                {
+                    moves.push(2);
+                }
+            } else {
+                if self.castling[0]
+                    && self.board[61] == Piece::Empty
+                    && self.board[62] == Piece::Empty
+                    && self.board[63] == Piece::Wrook
+                    && !self.is_check(60)
+                    && !self.is_check(61)
+                    && !self.is_check(62)
+                {
+                    moves.push(62);
+                }
+                if self.castling[1]
+                    && self.board[59] == Piece::Empty
+                    && self.board[58] == Piece::Empty
+                    && self.board[57] == Piece::Empty
+                    && self.board[56] == Piece::Wrook
+                    && !self.is_check(60)
+                    && !self.is_check(59)
+                    && !self.is_check(58)
+                {
+                    moves.push(58);
+                }
             }
         }
         moves
@@ -470,17 +504,22 @@ impl Chess {
         // Return true if the game is in a draw due to threefold repetition
         false
     }
-
-    // Check for fifty-move rule
-    pub fn is_fifty_move_rule(&self) -> bool {
-        // Implement your logic to check for the fifty-move rule here
-        // Return true if the game is in a draw due to the fifty-move rule
-        false
+    pub fn get_all_moves(&mut self) -> Vec<(usize, usize)> {
+        let mut moves: Vec<(usize, usize)> = Vec::new();
+        for i in 0..64 {
+            if self.board[i].is_white() == self.is_white_turn {
+                self.get_legals(i);
+                moves.extend(std::mem::take(&mut self.moves).into_iter().map(|x| (i, x)));
+            }
+        }
+        moves
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+
 pub enum Piece {
+    #[default]
     Empty,
     Bpawn,
     Wpawn,
@@ -507,5 +546,20 @@ impl Piece {
                 | Piece::Wqueen
                 | Piece::Wking
         )
+    }
+    pub fn evaluate(&self) -> f32 {
+        match self {
+            Piece::Wpawn => 100.0,
+            Piece::Bpawn => -100.0,
+            Piece::Wknight => 300.0,
+            Piece::Bknight => -300.0,
+            Piece::Wbishop => 320.0,
+            Piece::Bbishop => -320.0,
+            Piece::Wrook => 500.0,
+            Piece::Brook => -500.0,
+            Piece::Wqueen => 900.0,
+            Piece::Bqueen => -900.0,
+            _ => 0.0,
+        }
     }
 }

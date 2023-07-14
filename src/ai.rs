@@ -1,11 +1,72 @@
+use crate::chess::Chess;
+use std::f32::INFINITY;
+
 #[derive(Debug, Clone)]
 pub struct AI {
-    move_time: f32, //ms
+    depth: i32, //ms
 }
 
 impl AI {
-    pub fn new(move_time: f32) -> Self {
-        AI { move_time }
+    pub fn new(depth: i32) -> Self {
+        AI { depth }
     }
-    pub fn best_move(&mut self) {}
+    pub fn best_move(&mut self, mut chess: Chess) -> (usize, usize) {
+        let mut max = -INFINITY;
+        let mut best_move = (64, 64);
+        for (from, to) in chess.get_all_moves() {
+            let last = (
+                chess.board,
+                chess.castling,
+                chess.en_passant,
+                chess.is_white_turn,
+            );
+            chess.move_piece(from, to);
+            let eval = -self.search(self.depth - 1, -INFINITY, INFINITY, &mut chess);
+            chess.undo_move(last.0, last.1, last.2, last.3);
+            if eval > max {
+                max = eval;
+                best_move = (from, to);
+            }
+        }
+        best_move
+    }
+    pub fn search(&self, depth: i32, mut alpha: f32, beta: f32, chess: &mut Chess) -> f32 {
+        if depth == 0 {
+            return self.eval(chess);
+        }
+        let moves = chess.get_all_moves();
+        if moves.is_empty() {
+            if chess.is_check(chess.king_loc()) {
+                return -INFINITY;
+            }
+            return 0.0;
+        }
+        for (from, to) in moves {
+            let last = (
+                chess.board,
+                chess.castling,
+                chess.en_passant,
+                chess.is_white_turn,
+            );
+            chess.move_piece(from, to);
+            let eval = -self.search(depth - 1, -beta, -alpha, chess);
+            chess.undo_move(last.0, last.1, last.2, last.3);
+            if eval >= beta {
+                return beta;
+            }
+            alpha = alpha.max(eval);
+        }
+        alpha
+    }
+    pub fn eval(&self, chess: &Chess) -> f32 {
+        let mut eval = 0.0;
+        for piece in &chess.board {
+            eval += piece.evaluate();
+        }
+        if chess.is_white_turn {
+            eval
+        } else {
+            -eval
+        }
+    }
 }
