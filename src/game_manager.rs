@@ -1,4 +1,5 @@
 use crate::ai::AI;
+use crate::bitboard::Bitboard;
 use crate::chess::{Chess, Piece};
 use macroquad::prelude::*;
 use std::thread;
@@ -6,7 +7,7 @@ use std::time::Duration;
 
 pub struct GameManager {
     ai: AI,
-    chess: Chess,
+    pub chess: Chess,
     mouse_pos: Option<usize>,
     textures: [Texture2D; 13],
     pos: (f32, f32),
@@ -54,8 +55,26 @@ impl GameManager {
         }
         g
     }
-    pub fn draw(&self) {
+    fn draw_bitboard(&self, bitboard: Bitboard) {
+        for row in 0..8 {
+            for col in 0..8 {
+                let index = row * 8 + col;
+                let bit = (bitboard.0 >> index) & 1;
+                if bit == 1 {
+                    let x = col as f32 * 100.0 + self.pos.0;
+                    let y = row as f32 * 100.0 + self.pos.1;
+                    draw_rectangle(x, y, 100.0, 100.0, RED);
+                }
+            }
+        }
+    }
+    pub fn draw(&self, bitboard: Option<Bitboard>) {
+        //switch to move later
         draw_texture(self.textures[0], self.pos.0, self.pos.1, WHITE);
+        if let Some(bit) = bitboard {
+            //for testing bitboards
+            self.draw_bitboard(bit);
+        }
         for (i, piece) in self.chess.board.iter().enumerate() {
             let row = i / 8;
             let col = i % 8;
@@ -186,7 +205,7 @@ impl GameManager {
     pub async fn player_turn(&mut self) {
         self.chess.moves = vec![];
         loop {
-            self.draw();
+            self.draw(None);
             self.draw_moves();
             next_frame().await;
             thread::sleep(Duration::from_millis(100));
@@ -197,7 +216,7 @@ impl GameManager {
                     let piece_index = x;
                     self.chess.get_legals(piece_index);
                     while !is_mouse_button_pressed(MouseButton::Left) {
-                        self.draw();
+                        self.draw(None);
                         self.draw_moves();
                         next_frame().await;
                     }
@@ -212,7 +231,7 @@ impl GameManager {
                 } else {
                     self.chess.moves = vec![];
                     while !is_mouse_button_pressed(MouseButton::Left) {
-                        self.draw();
+                        self.draw(None);
                         self.draw_moves();
                         next_frame().await;
                     }
@@ -220,7 +239,7 @@ impl GameManager {
                 }
             } else {
                 while !is_mouse_button_pressed(MouseButton::Left) {
-                    self.draw();
+                    self.draw(None);
                     self.draw_moves();
                     next_frame().await;
                 }

@@ -12,11 +12,14 @@ pub struct Chess {
     last_castling: [bool; 4],
     last_en_passant: usize,
     last_turn: bool,
-    last_moved: Piece,
     pub white_king: usize,
     pub black_king: usize,
     pub white_attack: Bitboard,
     pub black_attack: Bitboard,
+    pub white_pins: Bitboard, //
+    pub black_pins: Bitboard,
+    last_attack: Bitboard,
+    last_pin: Bitboard,
 }
 
 impl Chess {
@@ -62,11 +65,14 @@ impl Chess {
             last_castling: [true; 4],
             last_en_passant: 64,
             last_turn: true,
-            last_moved: Piece::Empty,
             white_king: 60,
             black_king: 4,
             white_attack,
             black_attack,
+            white_pins: Bitboard::empty(),
+            black_pins: Bitboard::empty(),
+            last_attack: Bitboard::empty(),
+            last_pin: Bitboard::empty(),
         }
     }
     fn is_opponent_piece(&self, piece1: Piece, piece2: Piece) -> bool {
@@ -80,17 +86,7 @@ impl Chess {
         // first check for a check. if no check every move is legal except pins and king moves
         // if theres a check, search for the piece(s) whos giving the check (new whole move generation), now the king can either move to a safe square, or a piece can block it (ofc if its only 1 piece) and no pin breaking.
         //this method should reduce the generation from n^2 => 1.5n~3n, because this method makes the function work without moving pieces or generating anymore move.
-        self.move_piece(from, to);
-        self.is_white_turn = !self.is_white_turn;
-        let king = self.king_loc();
-        let check = !self.is_check(king);
-        self.undo_move(
-            self.last_board,
-            self.last_castling,
-            self.last_en_passant,
-            self.last_turn,
-        );
-        check
+        true
     }
     pub fn king_loc(&self) -> usize {
         if self.is_white_turn {
@@ -112,8 +108,12 @@ impl Chess {
         self.last_castling = self.castling;
         self.last_en_passant = self.en_passant;
         self.last_turn = self.is_white_turn;
+        self.last_attack = if self.is_white_turn {
+            self.white_attack
+        } else {
+            self.black_attack
+        };
         let piece = self.board[from];
-        self.last_moved = piece;
         self.en_passant = 64;
 
         match piece {
@@ -198,7 +198,14 @@ impl Chess {
                 self.board[59] = Piece::Wrook;
             }
         }
-        // TODO: update bitboard of the moved piece side attack (if white moves, update white. that way black will already be updated from last move)
+        //updating the attacked squares also updates the pins
+        if self.is_white_turn {
+            self.white_pins = Bitboard::empty();
+        } else {
+            self.black_pins = Bitboard::empty();
+        }
+        //update bitboard of the moved piece side attack (if white moves, update white. that way black will already be updated from last move)
+        self.update_attacked_squares();
         self.is_white_turn = !self.is_white_turn;
     }
 
@@ -209,32 +216,37 @@ impl Chess {
         en_passant: usize,
         turn: bool,
     ) {
-        // TODO: should be well optimized
+        // TODO: maybe get the attack and pins as input. only if ai causes trouble
         self.board = board;
         self.castling = castling;
         self.en_passant = en_passant;
         self.is_white_turn = turn;
-        // TODO: i will save the attack bitboard too. it would save a lot of computing power.
+        if self.is_white_turn {
+            self.white_attack = self.last_attack;
+            self.white_pins = self.last_pin;
+        } else {
+            self.black_attack = self.last_attack;
+            self.black_pins = self.last_pin;
+        }
     }
-    // pub fn get_attacked_squares(&mut self, color: Color) -> Bitboard {
-    //     // TODO: i think thats what it does. ill prob remake this since idfk whats going on here
-    //     let mut attacking_pieces = Bitboard::empty();
-    //     let opponent_color = color.opposite();
-    //     for i in 0..64 {
-    //         let piece = self.board[i];
-    //         if piece.get_color() == Some(opponent_color) {
-    //             let piece_bitboard = Bitboard::from_index(i);
-    //             let moves = self.gen_moves(i, true);
-    //             for move_index in moves {
-    //                 let move_bitboard = Bitboard::from_index(move_index);
-    //                 if move_bitboard.0 & piece_bitboard.0 != 0 {
-    //                     attacking_pieces.0 |= move_bitboard.0;
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     attacking_pieces
-    // }
+    pub fn update_attacked_squares(&mut self) {
+        //change a few things: 1. pawns attack are only captures
+        //possible moves are also eating friendly pieces
+        //only sliding moves are proccessed differently
+        // update the board of the color that moved
+        let mut attacked_squares = Bitboard::empty();
+        for (i, piece) in self.board.into_iter().enumerate() {
+            if piece.is_white() == self.is_white_turn {
+                // we want all moves, even if they cant actually move there
+                attacked_squares.switch_on_indices(&self.generate_attacks(i));
+            }
+        }
+        if self.is_white_turn {
+            self.white_attack = attacked_squares;
+        } else {
+            self.black_attack = attacked_squares;
+        }
+    }
     pub fn gen_moves(&mut self, index: usize, castling: bool) -> Vec<usize> {
         match self.board[index] {
             Piece::Wking | Piece::Bking => self.gen_moves_king(index, castling),
@@ -432,7 +444,7 @@ impl Chess {
         }
         moves
     }
-    fn gen_moves_knight(&mut self, index: usize) -> Vec<usize> {
+    fn gen_moves_knight(&self, index: usize) -> Vec<usize> {
         let mut moves = vec![];
         let piece = self.board[index];
         // Define the possible king moves in terms of row and column offsets
@@ -512,6 +524,447 @@ impl Chess {
                 moves.push(right_dia_pos);
             }
         }
+        moves
+    }
+    pub fn generate_attacks(&mut self, index: usize) -> Vec<usize> {
+        match self.board[index] {
+            Piece::Wking | Piece::Bking => self.gen_attacks_king(index),
+            Piece::Wqueen | Piece::Bqueen => {
+                let mut moves = self.gen_attacks_rook(index);
+                moves.extend(self.gen_attacks_bishop(index));
+                moves
+            }
+            Piece::Wrook | Piece::Brook => self.gen_attacks_rook(index),
+            Piece::Wbishop | Piece::Bbishop => self.gen_attacks_bishop(index),
+            Piece::Wknight | Piece::Bknight => self.gen_attacks_knight(index),
+            Piece::Wpawn | Piece::Bpawn => self.gen_attacks_pawn(index),
+            _ => Vec::new(),
+        }
+    }
+    fn gen_attacks_king(&self, index: usize) -> Vec<usize> {
+        let offsets: [(i32, i32); 8] = [
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ];
+        let row = index / 8;
+        let col = index % 8;
+        offsets
+            .iter()
+            .filter_map(|&(row_offset, col_offset)| {
+                let new_row = row as i32 + row_offset;
+                let new_col = col as i32 + col_offset;
+                if (0..8).contains(&new_row) && (0..8).contains(&new_col) {
+                    Some(new_row as usize * 8 + new_col as usize)
+                } else {
+                    None // Ignore moves outside the board boundaries
+                }
+            })
+            .collect()
+    }
+    fn gen_attacks_knight(&self, index: usize) -> Vec<usize> {
+        let offsets: [(i32, i32); 8] = [
+            (-2, -1),
+            (-1, 2),
+            (-1, -2),
+            (2, -1),
+            (2, 1),
+            (1, -2),
+            (1, 2),
+            (-2, 1),
+        ];
+        let row = index / 8;
+        let col = index % 8;
+        offsets
+            .iter()
+            .filter_map(|&(row_offset, col_offset)| {
+                let new_row = row as i32 + row_offset;
+                let new_col = col as i32 + col_offset;
+                if (0..8).contains(&new_row) && (0..8).contains(&new_col) {
+                    Some(new_row as usize * 8 + new_col as usize)
+                } else {
+                    None // Ignore moves outside the board boundaries
+                }
+            })
+            .collect()
+    }
+    fn gen_attacks_pawn(&self, index: usize) -> Vec<usize> {
+        let offsets = if self.board[index].is_white() {
+            [(-1, -1), (-1, 1)]
+        } else {
+            [(1, 1), (1, -1)]
+        };
+        let row = index / 8;
+        let col = index % 8;
+        offsets
+            .iter()
+            .filter_map(|&(row_offset, col_offset)| {
+                let new_row = row as i32 + row_offset;
+                let new_col = col as i32 + col_offset;
+                if (0..8).contains(&new_row) && (0..8).contains(&new_col) {
+                    Some(new_row as usize * 8 + new_col as usize)
+                } else {
+                    None // Ignore moves outside the board boundaries
+                }
+            })
+            .collect()
+    }
+    pub fn gen_attacks_rook(&mut self, index: usize) -> Vec<usize> {
+        let row = index / 8;
+        let col = index % 8;
+        let mut pin_squares = Bitboard::empty();
+        let mut move_squares = Bitboard::empty();
+        // Check horizontally to the right
+        let mut piece_count = 0;
+        let mut met_king = false;
+        for c in (col + 1)..8 {
+            let new_index = row * 8 + c;
+            let new_piece = self.board[new_index];
+            if new_piece == Piece::Empty && piece_count == 0 {
+                move_squares.switch_on_index(new_index);
+                pin_squares.switch_on_index(new_index);
+            } else if new_piece.is_white() != self.is_white_turn {
+                // Enemy piece
+                if new_piece == Piece::Bking || new_piece == Piece::Wking {
+                    move_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index);
+                    met_king = true;
+                    break; // No need to consider further moves in this direction
+                }
+                piece_count += 1;
+                pin_squares.switch_on_index(new_index);
+                if piece_count == 1 {
+                    move_squares.switch_on_index(new_index);
+                }
+            } else {
+                // Friendly piece
+                move_squares.switch_on_index(new_index);
+                break; // Stop considering further moves in this direction
+            }
+        }
+        if piece_count == 1 && met_king {
+            //only valid when an enemy piece is pinned to the king
+            if self.is_white_turn {
+                self.white_pins.0 |= pin_squares.0;
+            } else {
+                self.black_pins.0 |= pin_squares.0;
+            }
+        }
+
+        // Check horizontally to the left
+        let mut pin_squares = Bitboard::empty();
+        piece_count = 0;
+        met_king = false;
+        for c in (0..col).rev() {
+            let new_index = row * 8 + c;
+            let new_piece = self.board[new_index];
+            if new_piece == Piece::Empty && piece_count == 0 {
+                move_squares.switch_on_index(new_index);
+                pin_squares.switch_on_index(new_index);
+            } else if new_piece.is_white() != self.is_white_turn {
+                // Enemy piece
+                if new_piece == Piece::Bking || new_piece == Piece::Wking {
+                    move_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index);
+                    met_king = true;
+                    break; // No need to consider further moves in this direction
+                }
+                piece_count += 1;
+                pin_squares.switch_on_index(new_index);
+                if piece_count == 1 {
+                    move_squares.switch_on_index(new_index);
+                }
+            } else {
+                // Friendly piece
+                move_squares.switch_on_index(new_index);
+                break; // Stop considering further moves in this direction
+            }
+        }
+        if piece_count == 1 && met_king {
+            //only valid when an enemy piece is pinned to the king
+            if self.is_white_turn {
+                self.white_pins.0 |= pin_squares.0;
+            } else {
+                self.black_pins.0 |= pin_squares.0;
+            }
+        }
+
+        // Check vertically upwards
+        let mut pin_squares = Bitboard::empty();
+        piece_count = 0;
+        met_king = false;
+        for r in (0..row).rev() {
+            let new_index = r * 8 + col;
+            let new_piece = self.board[new_index];
+            if new_piece == Piece::Empty && piece_count == 0 {
+                move_squares.switch_on_index(new_index);
+                pin_squares.switch_on_index(new_index);
+            } else if new_piece.is_white() != self.is_white_turn {
+                // Enemy piece
+                if new_piece == Piece::Bking || new_piece == Piece::Wking {
+                    move_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index);
+                    met_king = true;
+                    break; // No need to consider further moves in this direction
+                }
+                piece_count += 1;
+                pin_squares.switch_on_index(new_index);
+                if piece_count == 1 {
+                    move_squares.switch_on_index(new_index);
+                }
+            } else {
+                // Friendly piece
+                move_squares.switch_on_index(new_index);
+                break; // Stop considering further moves in this direction
+            }
+        }
+        if piece_count == 1 && met_king {
+            //only valid when an enemy piece is pinned to the king
+            if self.is_white_turn {
+                self.white_pins.0 |= pin_squares.0;
+            } else {
+                self.black_pins.0 |= pin_squares.0;
+            }
+        }
+
+        // Check vertically downwards
+        let mut pin_squares = Bitboard::empty();
+        piece_count = 0;
+        met_king = false;
+        for r in (row + 1)..8 {
+            let new_index = r * 8 + col;
+            let new_piece = self.board[new_index];
+            if new_piece == Piece::Empty && piece_count == 0 {
+                move_squares.switch_on_index(new_index);
+                pin_squares.switch_on_index(new_index);
+            } else if new_piece.is_white() != self.is_white_turn {
+                // Enemy piece
+                if new_piece == Piece::Bking || new_piece == Piece::Wking {
+                    move_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index);
+                    met_king = true;
+                    break; // No need to consider further moves in this direction
+                }
+                piece_count += 1;
+                pin_squares.switch_on_index(new_index);
+                if piece_count == 1 {
+                    move_squares.switch_on_index(new_index);
+                }
+            } else {
+                // Friendly piece
+                move_squares.switch_on_index(new_index);
+                break; // Stop considering further moves in this direction
+            }
+        }
+        if piece_count == 1 && met_king {
+            //only valid when an enemy piece is pinned to the king
+            if self.is_white_turn {
+                self.white_pins.0 |= pin_squares.0;
+            } else {
+                self.black_pins.0 |= pin_squares.0;
+            }
+        }
+
+        // Convert the Bitboard to a Vec<usize> for output
+        let mut moves = Vec::new();
+        for i in move_squares.get_pieces() {
+            moves.push(i);
+        }
+
+        moves
+    }
+    pub fn gen_attacks_bishop(&mut self, index: usize) -> Vec<usize> {
+        let row = index / 8;
+        let col = index % 8;
+        let mut pin_squares = Bitboard::empty();
+        let mut move_squares = Bitboard::empty();
+
+        // Check diagonally to the top-right
+        let mut piece_count = 0;
+        let mut met_king = false;
+        for i in 1..8 {
+            let r = row as i32 + i;
+            let c = col as i32 + i;
+            if (0..8).contains(&r) && (0..8).contains(&c) {
+                let new_index = (r * 8 + c) as usize;
+                let new_piece = self.board[new_index];
+                if new_piece == Piece::Empty && piece_count == 0 {
+                    move_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index);
+                } else if new_piece.is_white() != self.is_white_turn {
+                    // Enemy piece
+                    if new_piece == Piece::Bking || new_piece == Piece::Wking {
+                        move_squares.switch_on_index(new_index);
+                        pin_squares.switch_on_index(new_index);
+                        met_king = true;
+                        break; // No need to consider further moves in this direction
+                    }
+                    piece_count += 1;
+                    pin_squares.switch_on_index(new_index);
+                    if piece_count == 1 {
+                        move_squares.switch_on_index(new_index);
+                    }
+                } else {
+                    // Friendly piece
+                    move_squares.switch_on_index(new_index);
+                    break; // Stop considering further moves in this direction
+                }
+            } else {
+                break; // Out of board boundaries
+            }
+        }
+        if piece_count == 1 && met_king {
+            //only valid when an enemy piece is pinned to the king
+            if self.is_white_turn {
+                self.white_pins.0 |= pin_squares.0;
+            } else {
+                self.black_pins.0 |= pin_squares.0;
+            }
+        }
+
+        // Check diagonally to the top-left
+        let mut pin_squares = Bitboard::empty();
+        piece_count = 0;
+        met_king = false;
+        for i in 1..8 {
+            let r = row as i32 + i;
+            let c = col as i32 - i;
+            if (0..8).contains(&r) && (0..8).contains(&c) {
+                let new_index = (r * 8 + c) as usize;
+                let new_piece = self.board[new_index];
+                if new_piece == Piece::Empty && piece_count == 0 {
+                    move_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index);
+                } else if new_piece.is_white() != self.is_white_turn {
+                    // Enemy piece
+                    if new_piece == Piece::Bking || new_piece == Piece::Wking {
+                        move_squares.switch_on_index(new_index);
+                        pin_squares.switch_on_index(new_index);
+                        met_king = true;
+                        break; // No need to consider further moves in this direction
+                    }
+                    piece_count += 1;
+                    pin_squares.switch_on_index(new_index);
+                    if piece_count == 1 {
+                        move_squares.switch_on_index(new_index);
+                    }
+                } else {
+                    // Friendly piece
+                    move_squares.switch_on_index(new_index);
+                    break; // Stop considering further moves in this direction
+                }
+            } else {
+                break; // Out of board boundaries
+            }
+        }
+        if piece_count == 1 && met_king {
+            //only valid when an enemy piece is pinned to the king
+            if self.is_white_turn {
+                self.white_pins.0 |= pin_squares.0;
+            } else {
+                self.black_pins.0 |= pin_squares.0;
+            }
+        }
+
+        // Check diagonally to the bottom-right
+        let mut pin_squares = Bitboard::empty();
+        piece_count = 0;
+        met_king = false;
+        for i in 1..8 {
+            let r = row as i32 - i;
+            let c = col as i32 + i;
+            if (0..8).contains(&r) && (0..8).contains(&c) {
+                let new_index = (r * 8 + c) as usize;
+                let new_piece = self.board[new_index];
+                if new_piece == Piece::Empty && piece_count == 0 {
+                    move_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index);
+                } else if new_piece.is_white() != self.is_white_turn {
+                    // Enemy piece
+                    if new_piece == Piece::Bking || new_piece == Piece::Wking {
+                        move_squares.switch_on_index(new_index);
+                        pin_squares.switch_on_index(new_index);
+                        met_king = true;
+                        break; // No need to consider further moves in this direction
+                    }
+                    piece_count += 1;
+                    pin_squares.switch_on_index(new_index);
+                    if piece_count == 1 {
+                        move_squares.switch_on_index(new_index);
+                    }
+                } else {
+                    // Friendly piece
+                    move_squares.switch_on_index(new_index);
+                    break; // Stop considering further moves in this direction
+                }
+            } else {
+                break; // Out of board boundaries
+            }
+        }
+        if piece_count == 1 && met_king {
+            //only valid when an enemy piece is pinned to the king
+            if self.is_white_turn {
+                self.white_pins.0 |= pin_squares.0;
+            } else {
+                self.black_pins.0 |= pin_squares.0;
+            }
+        }
+
+        // Check diagonally to the bottom-left
+        let mut pin_squares = Bitboard::empty();
+        piece_count = 0;
+        met_king = false;
+        for i in 1..8 {
+            let r = row as i32 - i;
+            let c = col as i32 - i;
+            if (0..8).contains(&r) && (0..8).contains(&c) {
+                let new_index = (r * 8 + c) as usize;
+                let new_piece = self.board[new_index];
+                if new_piece == Piece::Empty && piece_count == 0 {
+                    move_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index);
+                } else if new_piece.is_white() != self.is_white_turn {
+                    // Enemy piece
+                    if new_piece == Piece::Bking || new_piece == Piece::Wking {
+                        move_squares.switch_on_index(new_index);
+                        pin_squares.switch_on_index(new_index);
+                        met_king = true;
+                        break; // No need to consider further moves in this direction
+                    }
+                    piece_count += 1;
+                    pin_squares.switch_on_index(new_index);
+                    if piece_count == 1 {
+                        move_squares.switch_on_index(new_index);
+                    }
+                } else {
+                    // Friendly piece
+                    move_squares.switch_on_index(new_index);
+                    break; // Stop considering further moves in this direction
+                }
+            } else {
+                break; // Out of board boundaries
+            }
+        }
+        if piece_count == 1 && met_king {
+            //only valid when an enemy piece is pinned to the king
+            if self.is_white_turn {
+                self.white_pins.0 |= pin_squares.0;
+            } else {
+                self.black_pins.0 |= pin_squares.0;
+            }
+        }
+
+        // Convert the Bitboard to a Vec<usize> for output
+        let mut moves = Vec::new();
+        for i in move_squares.get_pieces() {
+            moves.push(i);
+        }
+
         moves
     }
     pub fn is_insufficient_material(&self) -> bool {

@@ -7,9 +7,9 @@ impl Bitboard {
         Bitboard(0)
     }
 
-    // pub fn set_bit(&mut self, index: usize) {
-    //     self.0 |= 1 << index;
-    // }
+    pub fn set_bit(&mut self, index: usize) {
+        self.0 |= 1 << index;
+    }
 
     // pub fn clear_bit(&mut self, index: usize) {
     //     self.0 &= !(1 << index);
@@ -28,6 +28,26 @@ impl Bitboard {
             bitboard &= bitboard - 1;
         }
         pieces
+    }
+    pub fn switch_on_indices(&mut self, indices: &[usize]) {
+        for &index in indices {
+            self.0 |= 1 << index;
+        }
+    }
+    pub fn switch_on_index(&mut self, index: usize) {
+        self.0 |= 1 << index;
+    }
+    pub fn print_bit_representation(&self) {
+        for row in 0..8 {
+            for col in 0..8 {
+                let index = row * 8 + col;
+                let bit = (self.0 >> index) & 1;
+                let square = if bit == 1 { "X" } else { "." };
+                print!("{} ", square);
+            }
+            println!();
+        }
+        println!("-------------");
     }
     // pub fn get_piece(&self) -> usize {
     //     if self.0 == 0 {

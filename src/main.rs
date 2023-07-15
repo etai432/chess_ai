@@ -169,7 +169,7 @@ async fn pvp(game_time: f32, additional: f32) {
     clear_background(BLACK);
     let mut game = GameManager::new(game_time, additional, None);
     while game.is_ending() == 2 {
-        game.draw();
+        game.draw(Some(game.chess.black_pins));
         if is_mouse_button_pressed(MouseButton::Left) {
             game.get_mouse_pos();
             game.player_turn().await;
@@ -192,7 +192,7 @@ async fn pvai(game_time: f32, additional: f32, mut player: BlackWhite, depth_ai:
         game.ai_turn();
     }
     while game.is_ending() == 2 {
-        game.draw();
+        game.draw(None);
         if is_mouse_button_pressed(MouseButton::Left) {
             game.get_mouse_pos();
             game.player_turn().await;
