@@ -1,7 +1,8 @@
+use crate::bitboard::Bitboard;
 use macroquad::prelude::*;
-use std::default::Default;
 
 #[derive(Debug, Clone)]
+//for now the only nececery bitboards are: white_attack, black_attack, king positions can be saved as a usize
 pub struct Chess {
     pub board: [Piece; 64],
     pub moves: Vec<usize>,
@@ -12,6 +13,11 @@ pub struct Chess {
     last_castling: [bool; 4],
     last_en_passant: usize,
     last_turn: bool,
+    last_moved: Piece,
+    pub white_king: usize,      // Bitboard representing white king
+    pub black_king: usize,      // Bitboard representing black king
+    pub white_attack: Bitboard, // Bitboard representing squares attacked by white pieces
+    pub black_attack: Bitboard, // Bitboard representing squares attacked by black pieces
 }
 
 impl Chess {
@@ -45,6 +51,8 @@ impl Chess {
             .take(56)
             .skip(48)
             .for_each(|piece| *piece = Piece::Wpawn);
+        let white_attack = Bitboard::empty();
+        let black_attack = Bitboard::empty();
         Chess {
             board,
             moves: Vec::new(),
@@ -55,6 +63,11 @@ impl Chess {
             last_castling: [true; 4],
             last_en_passant: 64,
             last_turn: true,
+            last_moved: Piece::Empty,
+            white_king: 60,
+            black_king: 4,
+            white_attack,
+            black_attack,
         }
     }
     fn is_opponent_piece(&self, piece1: Piece, piece2: Piece) -> bool {
@@ -64,6 +77,10 @@ impl Chess {
         piece1.is_white() != piece2.is_white()
     }
     pub fn is_legal(&mut self, from: usize, to: usize) -> bool {
+        // change the is legal to use the bitboards- firstly implement bitboards
+        // first check for a check. if no check every move is legal except pins and king moves
+        // if theres a check, search for the piece(s) whos giving the check (new whole move generation), now the king can either move to a safe square, or a piece can block it (ofc if its only 1 piece) and no pin breaking.
+        //this method should reduce the generation from n^2 => 1.5n~3n, because this method makes the function work without moving pieces or generating anymore move.
         self.move_piece(from, to);
         self.is_white_turn = !self.is_white_turn;
         let king = self.king_loc();
@@ -77,45 +94,19 @@ impl Chess {
         check
     }
     pub fn king_loc(&self) -> usize {
-        let king_piece = if self.is_white_turn {
-            Piece::Wking
-        } else {
-            Piece::Bking
-        };
-        self.board
-            .iter()
-            .position(|&piece| piece == king_piece)
-            .unwrap_or_else(|| {
-                println!("{:?} {:?}", self.board, king_piece);
-                panic!("king wasnt found (wtf)")
-            })
-    }
-    pub fn is_check(&mut self, king: usize) -> bool {
-        let mut moves: Vec<usize>;
         if self.is_white_turn {
-            for i in 0..64 {
-                if !self.board[i].is_white() {
-                    moves = self.gen_moves(i, false);
-                    for move1 in moves {
-                        if move1 == king {
-                            return true;
-                        }
-                    }
-                }
-            }
+            self.white_king
         } else {
-            for i in 0..64 {
-                if self.board[i].is_white() {
-                    moves = self.gen_moves(i, false);
-                    for move1 in moves {
-                        if move1 == king {
-                            return true;
-                        }
-                    }
-                }
-            }
+            self.black_king
         }
-        false
+    }
+    pub fn is_check(&self, king_position: usize) -> bool {
+        if self.is_white_turn {
+            self.black_attack
+        } else {
+            self.white_attack
+        }
+        .get_bit(king_position)
     }
     pub fn move_piece(&mut self, from: usize, to: usize) {
         self.last_board = self.board;
@@ -123,15 +114,19 @@ impl Chess {
         self.last_en_passant = self.en_passant;
         self.last_turn = self.is_white_turn;
         let piece = self.board[from];
+        self.last_moved = piece;
         self.en_passant = 64;
+
         match piece {
             Piece::Bking => {
                 self.castling[2] = false;
                 self.castling[3] = false;
+                self.black_king = to; //maybe need to save last_king in undo_move
             }
             Piece::Wking => {
                 self.castling[0] = false;
                 self.castling[1] = false;
+                self.white_king = to;
             }
             Piece::Brook => {
                 if from == 7 {
@@ -159,7 +154,10 @@ impl Chess {
             }
             _ => (),
         }
+
+        // Update the board
         self.board[from] = Piece::Empty;
+
         if piece == Piece::Wpawn && to < 8 {
             self.board[to] = Piece::Wqueen;
         } else if piece == Piece::Bpawn && to >= 56 {
@@ -167,17 +165,19 @@ impl Chess {
         } else {
             self.board[to] = piece;
         }
+
         if let Piece::Wpawn = piece {
             if to == self.en_passant {
-                let captured_piece_index = to - 8; // Assuming en passant captures happen in the row above
+                let captured_piece_index = to - 8;
                 self.board[captured_piece_index] = Piece::Empty;
             }
         } else if let Piece::Bpawn = piece {
             if to == self.en_passant {
-                let captured_piece_index = to + 8; // Assuming en passant captures happen in the row below
+                let captured_piece_index = to + 8;
                 self.board[captured_piece_index] = Piece::Empty;
             }
         }
+
         if let Piece::Bking = piece {
             if from == 4 && to == 6 {
                 // Perform kingside castling for white
@@ -199,8 +199,10 @@ impl Chess {
                 self.board[59] = Piece::Wrook;
             }
         }
+        //update bitboard of the moved piece side attack (if white moves, update white. that way black will already be updated from last move)
         self.is_white_turn = !self.is_white_turn;
     }
+
     pub fn undo_move(
         &mut self,
         board: [Piece; 64],
@@ -208,11 +210,32 @@ impl Chess {
         en_passant: usize,
         turn: bool,
     ) {
+        //should be well optimized
         self.board = board;
         self.castling = castling;
         self.en_passant = en_passant;
         self.is_white_turn = turn;
+        // i will save the attack bitboard too. it would save a lot of computing power.
     }
+    // pub fn get_attacked_squares(&mut self, color: Color) -> Bitboard {
+    //     //i think thats what it does. ill prob remake this since idfk whats going on here
+    //     let mut attacking_pieces = Bitboard::empty();
+    //     let opponent_color = color.opposite();
+    //     for i in 0..64 {
+    //         let piece = self.board[i];
+    //         if piece.get_color() == Some(opponent_color) {
+    //             let piece_bitboard = Bitboard::from_index(i);
+    //             let moves = self.gen_moves(i, true);
+    //             for move_index in moves {
+    //                 let move_bitboard = Bitboard::from_index(move_index);
+    //                 if move_bitboard.0 & piece_bitboard.0 != 0 {
+    //                     attacking_pieces.0 |= move_bitboard.0;
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     attacking_pieces
+    // }
     pub fn gen_moves(&mut self, index: usize, castling: bool) -> Vec<usize> {
         match self.board[index] {
             Piece::Wking | Piece::Bking => self.gen_moves_king(index, castling),
@@ -516,10 +539,9 @@ impl Chess {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 
 pub enum Piece {
-    #[default]
     Empty,
     Bpawn,
     Wpawn,

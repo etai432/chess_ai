@@ -1,4 +1,5 @@
 mod ai;
+mod bitboard;
 mod chess;
 mod game_manager;
 use game_manager::GameManager;
@@ -225,8 +226,12 @@ enum Pv {
 //crown for the winner (funny little bonus)
 
 //todo list:
+//optimazing
+//color last move
 //title
+//ai timer
 //pieces in menu
 //game endings- should prob be handled by the game manager
 //better ai
 //crown
+//maybe if ai not good enough, try magic bitboards
