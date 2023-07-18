@@ -2,8 +2,19 @@ mod ai;
 mod bitboard;
 mod chess;
 mod game_manager;
+use crate::{ai::AI, chess::Chess};
 use game_manager::GameManager;
-use macroquad::prelude::*;
+use macroquad::{
+    prelude::{
+        draw_rectangle, draw_text, draw_texture, is_mouse_button_down, is_mouse_button_pressed,
+        mouse_position, next_frame, screen_height, screen_width, Conf, MouseButton, Texture2D,
+        BLACK, DARKGRAY, GREEN, WHITE,
+    },
+    time::get_fps,
+    window::clear_background,
+};
+use rand::Rng;
+use std::time::Instant;
 
 pub fn window_conf() -> Conf {
     Conf {
@@ -18,8 +29,46 @@ pub fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    menu().await
+    menu().await;
 }
+
+// fn main() {
+//     // test_move_generation_speed(5)
+//     benchmark_chess();
+// }
+
+// fn benchmark_chess() {
+//     // Initialize chessboard
+//     let mut chess = Chess::new();
+
+//     // Measure time for test_knight_moves(21)
+//     let start_time_test_moves = Instant::now();
+//     let _test_moves = chess.gen_attacks_king(21);
+//     let elapsed_time_test_moves = start_time_test_moves.elapsed();
+
+//     // Measure time for gen_moves_knight(21)
+//     let start_time_gen_moves = Instant::now();
+//     let _test_moves = chess.gen_attacks_king_v2(21);
+//     let elapsed_time_gen_moves = start_time_gen_moves.elapsed();
+
+//     // Print the elapsed times
+//     println!(
+//         "gen_attacks_knight(21) elapsed time: {:?}",
+//         elapsed_time_test_moves
+//     );
+//     println!(
+//         "gen_attacks_knight_v2(21) elapsed time: {:?}",
+//         elapsed_time_gen_moves
+//     );
+// }
+
+// fn test_move_generation_speed(depth_ai: i32) {
+//     let start_time = Instant::now();
+//     let mut chess = Chess::new();
+//     let moves = AI::count_moves(depth_ai, &mut chess);
+//     let duration = start_time.elapsed();
+//     println!("Generated {} moves in {:?}", moves, duration);
+// }
 
 async fn menu() {
     let mut pv = Pv::Pvai;
@@ -34,6 +83,8 @@ async fn menu() {
         (screen_height() - button_height) / 2.0 + 130.0,
     );
     loop {
+        clear_background(DARKGRAY);
+        draw_pieces();
         egui_macroquad::ui(|egui_ctx| {
             let panel_width = 300.0;
             let panel_height = 700.0;
@@ -153,10 +204,22 @@ async fn menu() {
             && mouse_position().1 <= button_pos.y + button_height
         {
             if pv == Pv::Pvp {
-                pvp(time, additional_time_per_move).await;
+                let mut game =
+                    GameManager::new(time, additional_time_per_move, None, BlackWhite::Random);
+                game.pvp().await;
                 return;
             } else {
-                pvai(time, additional_time_per_move, blackwhite, depth_ai).await;
+                let mut rng = rand::thread_rng();
+                if blackwhite == BlackWhite::Random {
+                    blackwhite = if rng.gen_range(0..2) == 0 {
+                        BlackWhite::White
+                    } else {
+                        BlackWhite::Black
+                    };
+                }
+                let mut game =
+                    GameManager::new(time, additional_time_per_move, Some(depth_ai), blackwhite);
+                game.pvai().await;
                 return;
             }
         }
@@ -165,44 +228,39 @@ async fn menu() {
     }
 }
 
-async fn pvp(game_time: f32, additional: f32) {
-    clear_background(BLACK);
-    let mut game = GameManager::new(game_time, additional, None);
-    while game.is_ending() == 2 {
-        game.draw(Some(game.chess.black_pins));
-        if is_mouse_button_pressed(MouseButton::Left) {
-            game.get_mouse_pos();
-            game.player_turn().await;
-        }
-        next_frame().await;
-    }
+fn draw_pieces() {
+    let mut piece: Texture2D;
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\white_king.png"), None);
+    draw_texture(piece, 100.0, 100.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\white_queen.png"), None);
+    draw_texture(piece, 300.0, 225.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\white_rook.png"), None);
+    draw_texture(piece, 500.0, 350.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\white_bishop.png"), None);
+    draw_texture(piece, 100.0, 475.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\white_knight.png"), None);
+    draw_texture(piece, 300.0, 600.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\white_pawn.png"), None);
+    draw_texture(piece, 500.0, 725.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\black_king.png"), None);
+    draw_texture(piece, 1700.0, 100.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\black_queen.png"), None);
+    draw_texture(piece, 1500.0, 225.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\black_rook.png"), None);
+    draw_texture(piece, 1300.0, 350.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\black_bishop.png"), None);
+    draw_texture(piece, 1700.0, 475.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\black_knight.png"), None);
+    draw_texture(piece, 1500.0, 600.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\black_pawn.png"), None);
+    draw_texture(piece, 1300.0, 725.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\crown.png"), None);
+    draw_texture(piece, 100.0, 65.0, WHITE);
+    piece = Texture2D::from_file_with_format(include_bytes!(r".\images\crown.png"), None);
+    draw_texture(piece, 1700.0, 65.0, WHITE);
 }
 
-async fn pvai(game_time: f32, additional: f32, mut player: BlackWhite, depth_ai: i32) {
-    clear_background(BLACK);
-    let mut game = GameManager::new(game_time, additional, Some(depth_ai));
-    if player == BlackWhite::Random {
-        player = if rand::gen_range(0, 1) == 0 {
-            BlackWhite::White
-        } else {
-            BlackWhite::Black
-        };
-    }
-    if player == BlackWhite::Black {
-        game.ai_turn();
-    }
-    while game.is_ending() == 2 {
-        game.draw(None);
-        if is_mouse_button_pressed(MouseButton::Left) {
-            game.get_mouse_pos();
-            game.player_turn().await;
-            game.ai_turn();
-        }
-        next_frame().await;
-    }
-}
-
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum BlackWhite {
     Black,
     White,
@@ -214,7 +272,7 @@ enum Pv {
     Pvai,
 }
 //todo:
-//chess: done for now
+//chess: done for now <- L bozo thought he was done
 //ai: best move
 //game:
 //ai turn (after ai)
@@ -226,12 +284,12 @@ enum Pv {
 //crown for the winner (funny little bonus)
 
 //todo list:
-//optimazing
-//color last move
-//title
-//ai timer
-//pieces in menu
 //game endings- should prob be handled by the game manager
+//crowns and winner titles
+//bugs go here:
+//checking white crashes game
+//handle castling and hella debug the game. maybe even using the stockfish thing
+//undo move!! using a move struct. also split the make_move according to the move struct.
 //better ai
-//crown
+//optimazing- maybe use magic bitboards for sliding pieces idfk- much later. also look for what else i can optimize:
 //maybe if ai not good enough, try magic bitboards

@@ -69,4 +69,23 @@ impl AI {
             -eval
         }
     }
+    pub fn count_moves(depth: i32, chess: &mut Chess) -> i32 {
+        if depth == 0 {
+            return 1;
+        }
+        let mut num = 0;
+        let moves = chess.get_all_moves();
+        for move1 in moves.into_iter() {
+            let last = (
+                chess.board,
+                chess.castling,
+                chess.en_passant,
+                chess.is_white_turn,
+            );
+            chess.move_piece(move1.0, move1.1);
+            num += AI::count_moves(depth - 1, chess);
+            chess.undo_move(last.0, last.1, last.2, last.3);
+        }
+        num
+    }
 }

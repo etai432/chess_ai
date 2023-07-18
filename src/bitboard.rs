@@ -80,6 +80,30 @@ impl Bitboard {
         let mask = 1u64 << index;
         Bitboard(mask)
     }
+
+    pub fn ray(from: usize, to: usize) -> Bitboard {
+        let from_row = from / 8;
+        let from_col = from % 8;
+        let to_row = to / 8;
+        let to_col = to % 8;
+
+        // Calculate the row and column differences
+        let row_diff = (to_row as i32 - from_row as i32).signum();
+        let col_diff = (to_col as i32 - from_col as i32).signum();
+
+        let mut current_square = from;
+        let mut ray_bitboard = Bitboard::empty();
+
+        // Generate the ray by moving along the row and column differences
+        while current_square != to {
+            current_square = ((current_square as i32) + row_diff * 8 + col_diff) as usize;
+            if !(0..63).contains(&current_square) {
+                break;
+            }
+            ray_bitboard.set_bit(current_square);
+        }
+        ray_bitboard
+    }
     // pub fn from_piece(piece: Piece, board: &[Piece; 64]) -> Bitboard {
     //     let mask = board
     //         .iter()

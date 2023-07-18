@@ -1,23 +1,26 @@
 use crate::ai::AI;
 use crate::bitboard::Bitboard;
 use crate::chess::{Chess, Piece};
+use crate::BlackWhite;
 use macroquad::prelude::*;
 use std::thread;
 use std::time::Duration;
 
 pub struct GameManager {
-    ai: AI,
+    pub ai: AI,
     pub chess: Chess,
     mouse_pos: Option<usize>,
     textures: [Texture2D; 13],
     pos: (f32, f32),
     timer: Timer,
+    game_state: i32,
+    player_vs_ai: BlackWhite,
 }
 
 impl GameManager {
-    pub fn new(start: f32, add: f32, ai_time: Option<i32>) -> Self {
-        let g = GameManager {
-            ai: AI::new(ai_time.unwrap_or(1)),
+    pub fn new(start: f32, add: f32, ai_depth: Option<i32>, player_vs_ai: BlackWhite) -> Self {
+        let mut g = GameManager {
+            ai: AI::new(ai_depth.unwrap_or(1)),
             chess: Chess::new(),
             mouse_pos: None,
             textures: [
@@ -49,9 +52,13 @@ impl GameManager {
             ],
             pos: (100.0, 200.0),
             timer: Timer::new(start, add),
+            game_state: -2,
+            player_vs_ai,
         };
-        if ai_time.is_some() {
-            //change players timer to ...
+        if player_vs_ai == BlackWhite::White {
+            g.timer.time_black = 0.0;
+        } else if player_vs_ai == BlackWhite::Black {
+            g.timer.time_white = 0.0;
         }
         g
     }
@@ -68,13 +75,28 @@ impl GameManager {
             }
         }
     }
-    pub fn draw(&self, bitboard: Option<Bitboard>) {
+    fn draw_move(&self, from: usize, to: usize) {
+        if (0..64).contains(&from) && (0..64).contains(&to) {
+            let from_x = (from % 8) as f32 * 100.0 + self.pos.0;
+            let from_y = (from / 8) as f32 * 100.0 + self.pos.1;
+            draw_rectangle(from_x, from_y, 100.0, 100.0, YELLOW);
+            let to_x = (to % 8) as f32 * 100.0 + self.pos.0;
+            let to_y = (to / 8) as f32 * 100.0 + self.pos.1;
+            draw_rectangle(to_x, to_y, 100.0, 100.0, YELLOW);
+        }
+    }
+    fn draw_check(&self) {
+        if self.chess.is_check(self.chess.king_loc()) {
+            let x = (self.chess.king_loc() % 8) as f32 * 100.0 + self.pos.0;
+            let y = (self.chess.king_loc() / 8) as f32 * 100.0 + self.pos.1;
+            draw_rectangle(x, y, 100.0, 100.0, RED);
+        }
+    }
+    pub fn draw(&self) {
         //switch to move later
         draw_texture(self.textures[0], self.pos.0, self.pos.1, WHITE);
-        if let Some(bit) = bitboard {
-            //for testing bitboards
-            self.draw_bitboard(bit);
-        }
+        self.draw_move(self.chess.last_move.0, self.chess.last_move.1);
+        self.draw_check();
         for (i, piece) in self.chess.board.iter().enumerate() {
             let row = i / 8;
             let col = i % 8;
@@ -156,6 +178,7 @@ impl GameManager {
             200.0,
             BLACK,
         );
+        self.draw_title();
     }
     pub fn draw_moves(&self) {
         for i in self.chess.moves.clone() {
@@ -205,7 +228,7 @@ impl GameManager {
     pub async fn player_turn(&mut self) {
         self.chess.moves = vec![];
         loop {
-            self.draw(None);
+            self.draw();
             self.draw_moves();
             next_frame().await;
             thread::sleep(Duration::from_millis(100));
@@ -216,7 +239,7 @@ impl GameManager {
                     let piece_index = x;
                     self.chess.get_legals(piece_index);
                     while !is_mouse_button_pressed(MouseButton::Left) {
-                        self.draw(None);
+                        self.draw();
                         self.draw_moves();
                         next_frame().await;
                     }
@@ -231,7 +254,7 @@ impl GameManager {
                 } else {
                     self.chess.moves = vec![];
                     while !is_mouse_button_pressed(MouseButton::Left) {
-                        self.draw(None);
+                        self.draw();
                         self.draw_moves();
                         next_frame().await;
                     }
@@ -239,7 +262,7 @@ impl GameManager {
                 }
             } else {
                 while !is_mouse_button_pressed(MouseButton::Left) {
-                    self.draw(None);
+                    self.draw();
                     self.draw_moves();
                     next_frame().await;
                 }
@@ -255,34 +278,30 @@ impl GameManager {
     pub fn ai_turn(&mut self) {
         let (from, to) = self.ai.best_move(self.chess.clone());
         self.chess.move_piece(from, to);
-        if self.chess.is_white_turn {
-            self.timer.update_black();
-        } else {
-            self.timer.update_white();
-        }
     }
     pub fn is_ending(&mut self) -> i32 {
         if !self.has_moves() {
             if self.chess.is_check(self.chess.king_loc()) {
                 if self.chess.is_white_turn {
-                    println!("black checkmate");
+                    self.game_state = -1;
                     return -1;
                 } else {
-                    println!("white checkmate");
+                    self.game_state = 1;
                     return 1;
                 }
             } else {
-                println!("Stalemate");
+                self.game_state = 0;
                 return 0;
             }
         }
         if self.chess.is_insufficient_material() {
-            println!("Draw by Insufficient Material");
+            self.game_state = 3;
             return 3;
         } else if self.chess.is_threefold_repetition() {
-            println!("Draw by Threefold Repetition");
+            self.game_state = 4;
             return 4;
         }
+        self.game_state = if self.chess.is_white_turn { -2 } else { -3 };
         2
     }
     pub fn has_moves(&mut self) -> bool {
@@ -295,6 +314,103 @@ impl GameManager {
             }
         }
         false
+    }
+    pub async fn pvp(&mut self) {
+        clear_background(BLACK);
+        while self.is_ending() == 2 {
+            self.draw();
+            if is_mouse_button_pressed(MouseButton::Left) {
+                self.get_mouse_pos();
+                self.player_turn().await;
+            }
+            next_frame().await;
+        }
+        loop {
+            self.draw();
+            next_frame().await;
+        }
+    }
+    pub async fn pvai(&mut self) {
+        //self.change_ai_timer()
+        clear_background(BLACK);
+        if self.player_vs_ai == BlackWhite::Black {
+            self.ai_turn();
+        }
+        while self.is_ending() == 2 {
+            self.draw();
+            if is_mouse_button_pressed(MouseButton::Left) {
+                self.get_mouse_pos();
+                self.player_turn().await;
+                self.ai_turn();
+            }
+            next_frame().await;
+        }
+    }
+    fn draw_title(&self) {
+        draw_text(
+            match self.game_state {
+                -2 => "white turn",
+                -3 => "black turn",
+                0 => "stalemate",
+                -1 => "black checkmate",
+                1 => "white checkmate",
+                3 => "Insufficient Material",
+                4 => "Threefold Repetition",
+                5 => "50 move rule",
+                6 => "time forfeit",
+                _ => "undefined",
+            },
+            930.0,
+            300.0,
+            100.0,
+            GREEN,
+        );
+        if self.game_state == -1 {
+            //win title
+            let loc = self.chess.black_king;
+            let x = (loc % 8) as f32 * 100.0 + self.pos.0;
+            let y = (loc / 8) as f32 * 100.0 + self.pos.1 - 35.0;
+            draw_texture(
+                Texture2D::from_file_with_format(include_bytes!(r".\images\crown.png"), None),
+                x,
+                y,
+                WHITE,
+            );
+        }
+        if self.game_state == 1 {
+            //win title
+            let loc = self.chess.white_king;
+            let x = (loc % 8) as f32 * 100.0 + self.pos.0;
+            let y = (loc / 8) as f32 * 100.0 + self.pos.1 - 35.0;
+            draw_texture(
+                Texture2D::from_file_with_format(include_bytes!(r".\images\crown.png"), None),
+                x,
+                y,
+                WHITE,
+            );
+        }
+        if self.game_state == 6 {} // winner titles and crowns
+        if self.game_state == 0 || (3..6).contains(&self.game_state) {
+            //draw title
+            let loc = self.chess.white_king;
+            let x = (loc % 8) as f32 * 100.0 + self.pos.0;
+            let y = (loc / 8) as f32 * 100.0 + self.pos.1 - 35.0;
+            draw_texture(
+                Texture2D::from_file_with_format(include_bytes!(r".\images\crown.png"), None),
+                x,
+                y,
+                WHITE,
+            );
+            let loc = self.chess.black_king;
+            let x = (loc % 8) as f32 * 100.0 + self.pos.0;
+            let y = (loc / 8) as f32 * 100.0 + self.pos.1 - 35.0;
+            draw_texture(
+                Texture2D::from_file_with_format(include_bytes!(r".\images\crown.png"), None),
+                x,
+                y,
+                WHITE,
+            );
+        }
     }
 }
 
