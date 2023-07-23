@@ -284,10 +284,10 @@ enum Pv {
 //crown for the winner (funny little bonus)
 
 //todo list:
-//game endings- should prob be handled by the game manager
+//game endings- timers, threefold, insufficient
 //crowns and winner titles
 //bugs go here:
-//checking white crashes game
+//checking white/black crashes game
 //handle castling and hella debug the game. maybe even using the stockfish thing
 //undo move!! using a move struct. also split the make_move according to the move struct.
 //better ai

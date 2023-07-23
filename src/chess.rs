@@ -1083,6 +1083,25 @@ impl Chess {
             .filter(|&i| i != 64)
             .collect()
     }
+    pub fn is_ending(&mut self) -> i32 {
+        if self.get_all_moves().is_empty() {
+            if self.is_check(self.king_loc()) {
+                if self.is_white_turn {
+                    -1
+                } else {
+                    1
+                }
+            } else {
+                0
+            }
+        } else if self.is_insufficient_material() {
+            3
+        } else if self.is_threefold_repetition() {
+            4
+        } else {
+            2
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

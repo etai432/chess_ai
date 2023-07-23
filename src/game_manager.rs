@@ -279,45 +279,24 @@ impl GameManager {
         let (from, to) = self.ai.best_move(self.chess.clone());
         self.chess.move_piece(from, to);
     }
-    pub fn is_ending(&mut self) -> i32 {
-        if !self.has_moves() {
-            if self.chess.is_check(self.chess.king_loc()) {
+    pub fn game_state(&mut self) -> i32 {
+        //firstly handle timers
+        match self.chess.is_ending() {
+            2 => {
                 if self.chess.is_white_turn {
-                    self.game_state = -1;
-                    return -1;
+                    self.game_state = -2;
                 } else {
-                    self.game_state = 1;
-                    return 1;
+                    self.game_state = -3;
                 }
-            } else {
-                self.game_state = 0;
-                return 0;
+                return 2;
             }
-        }
-        if self.chess.is_insufficient_material() {
-            self.game_state = 3;
-            return 3;
-        } else if self.chess.is_threefold_repetition() {
-            self.game_state = 4;
-            return 4;
-        }
-        self.game_state = if self.chess.is_white_turn { -2 } else { -3 };
-        2
-    }
-    pub fn has_moves(&mut self) -> bool {
-        for (i, p) in self.chess.board.into_iter().enumerate() {
-            if p.is_white() == self.chess.is_white_turn {
-                self.chess.get_legals(i);
-                if !self.chess.moves.is_empty() {
-                    return true;
-                }
-            }
-        }
-        false
+            x => self.game_state = x,
+        };
+        self.game_state
     }
     pub async fn pvp(&mut self) {
         clear_background(BLACK);
-        while self.is_ending() == 2 {
+        while self.game_state() == 2 {
             self.draw();
             if is_mouse_button_pressed(MouseButton::Left) {
                 self.get_mouse_pos();
@@ -336,7 +315,7 @@ impl GameManager {
         if self.player_vs_ai == BlackWhite::Black {
             self.ai_turn();
         }
-        while self.is_ending() == 2 {
+        while self.game_state() == 2 {
             self.draw();
             if is_mouse_button_pressed(MouseButton::Left) {
                 self.get_mouse_pos();
