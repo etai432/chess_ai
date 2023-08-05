@@ -7,7 +7,7 @@ impl Bitboard {
         Bitboard(0)
     }
 
-    pub fn set_bit(&mut self, index: usize) {
+    pub fn set_bit(&mut self, index: u8) {
         self.0 |= 1 << index;
     }
 
@@ -15,26 +15,26 @@ impl Bitboard {
     //     self.0 &= !(1 << index);
     // }
 
-    pub fn get_bit(&self, index: usize) -> bool {
+    pub fn get_bit(&self, index: u8) -> bool {
         (self.0 & (1 << index)) != 0
     }
 
-    pub fn get_pieces(&self) -> Vec<usize> {
-        let mut pieces = Vec::new();
-        let mut bitboard = self.0;
-        while bitboard != 0 {
-            let index = bitboard.trailing_zeros() as usize;
-            pieces.push(index);
-            bitboard &= bitboard - 1;
-        }
-        pieces
-    }
-    pub fn switch_on_indices(&mut self, indices: &[usize]) {
+    // pub fn get_pieces(&self) -> Vec<usize> {
+    //     let mut pieces = Vec::new();
+    //     let mut bitboard = self.0;
+    //     while bitboard != 0 {
+    //         let index = bitboard.trailing_zeros() as usize;
+    //         pieces.push(index);
+    //         bitboard &= bitboard - 1;
+    //     }
+    //     pieces
+    // }
+    pub fn switch_on_indices(&mut self, indices: &[u8]) {
         for &index in indices {
             self.0 |= 1 << index;
         }
     }
-    pub fn switch_on_index(&mut self, index: usize) {
+    pub fn switch_on_index(&mut self, index: u8) {
         self.0 |= 1 << index;
     }
     pub fn print_bit_representation(&self) {
@@ -76,12 +76,15 @@ impl Bitboard {
     //     bitboard
     // }
 
-    pub fn from_index(index: usize) -> Bitboard {
-        let mask = 1u64 << index;
-        Bitboard(mask)
+    pub fn from_index(index: u8) -> Bitboard {
+        if (0..64).contains(&index) {
+            let mask = 1u64 << index;
+            return Bitboard(mask);
+        }
+        Bitboard(0)
     }
 
-    pub fn ray(from: usize, to: usize) -> Bitboard {
+    pub fn ray(from: u8, to: u8) -> Bitboard {
         let from_row = from / 8;
         let from_col = from % 8;
         let to_row = to / 8;
@@ -96,7 +99,7 @@ impl Bitboard {
 
         // Generate the ray by moving along the row and column differences
         while current_square != to {
-            current_square = ((current_square as i32) + row_diff * 8 + col_diff) as usize;
+            current_square = ((current_square as i32) + row_diff * 8 + col_diff) as u8;
             if !(0..63).contains(&current_square) {
                 break;
             }

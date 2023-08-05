@@ -10,19 +10,13 @@ impl AI {
     pub fn new(depth: i32) -> Self {
         AI { depth }
     }
-    pub fn best_move(&mut self, mut chess: Chess) -> (usize, usize) {
+    pub fn best_move(&mut self, mut chess: Chess) -> (u8, u8) {
         let mut max = -INFINITY;
         let mut best_move = (64, 64);
         for (from, to) in chess.get_all_moves() {
-            let last = (
-                chess.board,
-                chess.castling,
-                chess.en_passant,
-                chess.is_white_turn,
-            );
-            chess.move_piece(from, to);
+            let chess_move = chess.move_piece(from, to);
             let eval = -self.search(self.depth - 1, -INFINITY, INFINITY, &mut chess);
-            chess.undo_move(last.0, last.1, last.2, last.3);
+            chess.undo_move(chess_move);
             if eval > max {
                 max = eval;
                 best_move = (from, to);
@@ -42,15 +36,9 @@ impl AI {
             return 0.0;
         }
         for (from, to) in moves {
-            let last = (
-                chess.board,
-                chess.castling,
-                chess.en_passant,
-                chess.is_white_turn,
-            );
-            chess.move_piece(from, to);
+            let chess_move = chess.move_piece(from, to);
             let eval = -self.search(depth - 1, -beta, -alpha, chess);
-            chess.undo_move(last.0, last.1, last.2, last.3);
+            chess.undo_move(chess_move);
             if eval >= beta {
                 return beta;
             }
@@ -76,15 +64,9 @@ impl AI {
         let mut num = 0;
         let moves = chess.get_all_moves();
         for move1 in moves.into_iter() {
-            let last = (
-                chess.board,
-                chess.castling,
-                chess.en_passant,
-                chess.is_white_turn,
-            );
-            chess.move_piece(move1.0, move1.1);
+            let chess_move = chess.move_piece(move1.0, move1.1);
             num += AI::count_moves(depth - 1, chess);
-            chess.undo_move(last.0, last.1, last.2, last.3);
+            chess.undo_move(chess_move);
         }
         num
     }

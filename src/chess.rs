@@ -4,27 +4,23 @@ use macroquad::prelude::*;
 #[derive(Debug, Clone)]
 pub struct Chess {
     pub board: [Piece; 64],
-    pub moves: Vec<usize>,
+    pub moves: Vec<u8>,
     pub castling: [bool; 4], //white, white long, black, black long
-    pub en_passant: usize,
+    pub en_passant: u8,
     pub is_white_turn: bool,
-    last_board: [Piece; 64],
-    last_castling: [bool; 4],
-    last_en_passant: usize,
-    last_turn: bool,
-    pub white_king: usize,
-    pub black_king: usize,
+    pub white_king: u8,
+    pub black_king: u8,
     pub white_attack: Bitboard,
     pub black_attack: Bitboard,
-    pub white_pins: Bitboard, //
+    pub white_pins: Bitboard,
     pub black_pins: Bitboard,
     last_attack: Bitboard,
     last_pin: Bitboard,
-    checking_pieces: Vec<usize>,
-    pub knight_moves: [[usize; 8]; 64],
-    pawn_moves: [[usize; 4]; 128],
-    king_moves: [[usize; 8]; 64],
-    pub last_move: (usize, usize),
+    checking_pieces: Vec<u8>,
+    pub knight_moves: [[u8; 8]; 64],
+    pawn_moves: [[u8; 4]; 128],
+    king_moves: [[u8; 8]; 64],
+    pub last_move: (u8, u8),
 }
 
 impl Chess {
@@ -66,10 +62,6 @@ impl Chess {
             castling: [true; 4],
             en_passant: 64,
             is_white_turn: true,
-            last_board: [Piece::Empty; 64],
-            last_castling: [true; 4],
-            last_en_passant: 64,
-            last_turn: true,
             white_king: 60,
             black_king: 4,
             white_attack,
@@ -91,16 +83,18 @@ impl Chess {
         }
         piece1.is_white() != piece2.is_white()
     }
-    pub fn is_legal(&self, from: usize, to: usize) -> bool {
+    pub fn is_legal(&self, from: u8, to: u8) -> bool {
         if self.is_check(self.king_loc()) {
-            if self.board[from] == Piece::Bking || self.board[from] == Piece::Wking {
+            if self.board[from as usize] == Piece::Bking
+                || self.board[from as usize] == Piece::Wking
+            {
                 //moving the king
                 !self.is_check(to)
             } else if self.checking_pieces.len() == 1 {
                 //blocking is only possible when a single check happens.
                 //check if blockable
                 if matches!(
-                    self.board[self.checking_pieces[0]],
+                    self.board[self.checking_pieces[0] as usize],
                     Piece::Bbishop
                         | Piece::Wbishop
                         | Piece::Brook
@@ -120,7 +114,7 @@ impl Chess {
         } else {
             //king is safe, just dont break pins
             if self.is_white_turn {
-                if self.board[from] == Piece::Wking {
+                if self.board[from as usize] == Piece::Wking {
                     //piece is king
                     !self.is_check(to)
                 } else if self.black_pins.get_bit(from) {
@@ -129,7 +123,7 @@ impl Chess {
                 } else {
                     true // piece isnt pinned
                 }
-            } else if self.board[from] == Piece::Bking {
+            } else if self.board[from as usize] == Piece::Bking {
                 !self.is_check(to)
             } else if self.white_pins.get_bit(from) {
                 self.white_pins.get_bit(to)
@@ -138,14 +132,14 @@ impl Chess {
             }
         }
     }
-    pub fn king_loc(&self) -> usize {
+    pub fn king_loc(&self) -> u8 {
         if self.is_white_turn {
             self.white_king
         } else {
             self.black_king
         }
     }
-    pub fn is_check(&self, king_position: usize) -> bool {
+    pub fn is_check(&self, king_position: u8) -> bool {
         if self.is_white_turn {
             self.black_attack
         } else {
@@ -153,17 +147,16 @@ impl Chess {
         }
         .get_bit(king_position)
     }
-    pub fn move_piece(&mut self, from: usize, to: usize) {
-        self.last_board = self.board;
-        self.last_castling = self.castling;
-        self.last_en_passant = self.en_passant;
-        self.last_turn = self.is_white_turn;
-        self.last_attack = if self.is_white_turn {
-            self.white_attack
-        } else {
-            self.black_attack
-        };
-        let piece = self.board[from];
+    pub fn move_piece(&mut self, from: u8, to: u8) -> ChessMove {
+        let mut castle_flag = false;
+        let mut en_passant_flag = false;
+        let captured_piece = self.board[to as usize];
+        // self.last_attack = if self.is_white_turn {
+        //     self.white_attack
+        // } else {
+        //     self.black_attack
+        // };
+        let piece = self.board[from as usize];
         self.en_passant = 64;
 
         match piece {
@@ -205,25 +198,27 @@ impl Chess {
         }
 
         // Update the board
-        self.board[from] = Piece::Empty;
+        self.board[from as usize] = Piece::Empty;
 
         if piece == Piece::Wpawn && to < 8 {
-            self.board[to] = Piece::Wqueen;
+            self.board[to as usize] = Piece::Wqueen;
         } else if piece == Piece::Bpawn && to >= 56 {
-            self.board[to] = Piece::Bqueen;
+            self.board[to as usize] = Piece::Bqueen;
         } else {
-            self.board[to] = piece;
+            self.board[to as usize] = piece;
         }
 
         if let Piece::Wpawn = piece {
             if to == self.en_passant {
+                en_passant_flag = true;
                 let captured_piece_index = to - 8;
-                self.board[captured_piece_index] = Piece::Empty;
+                self.board[captured_piece_index as usize] = Piece::Empty;
             }
         } else if let Piece::Bpawn = piece {
             if to == self.en_passant {
+                en_passant_flag = true;
                 let captured_piece_index = to + 8;
-                self.board[captured_piece_index] = Piece::Empty;
+                self.board[captured_piece_index as usize] = Piece::Empty;
             }
         }
 
@@ -232,20 +227,24 @@ impl Chess {
                 // Perform kingside castling for white
                 self.board[7] = Piece::Empty;
                 self.board[5] = Piece::Brook;
+                castle_flag = true;
             } else if from == 4 && to == 2 {
                 // Perform queenside castling for white
                 self.board[0] = Piece::Empty;
                 self.board[3] = Piece::Brook;
+                castle_flag = true;
             }
         } else if let Piece::Wking = piece {
             if from == 60 && to == 62 {
                 // Perform kingside castling for black
                 self.board[63] = Piece::Empty;
                 self.board[61] = Piece::Wrook;
+                castle_flag = true;
             } else if from == 60 && to == 58 {
                 // Perform queenside castling for black
                 self.board[56] = Piece::Empty;
                 self.board[59] = Piece::Wrook;
+                castle_flag = true;
             }
         }
         //updating the attacked squares also updates the pins
@@ -254,32 +253,36 @@ impl Chess {
         } else {
             self.black_pins = Bitboard::empty();
         }
-        self.last_move = (from, to);
         //update bitboard of the moved piece side attack (if white moves, update white. that way black will already be updated from last move)
         self.update_attacked_squares();
         self.is_white_turn = !self.is_white_turn;
+        ChessMove {
+            from,
+            to,
+            castle_flag,
+            en_passant_flag,
+            captured_piece,
+        }
     }
 
-    pub fn undo_move(
-        &mut self,
-        board: [Piece; 64],
-        castling: [bool; 4],
-        en_passant: usize,
-        turn: bool,
-        // last_king: usize,
-    ) {
-        // TODO: maybe get the attack and pins as input. only if ai causes trouble
-        self.board = board;
-        self.castling = castling;
-        self.en_passant = en_passant;
-        self.is_white_turn = turn;
-        if self.is_white_turn {
-            self.white_attack = self.last_attack;
-            self.white_pins = self.last_pin;
-        } else {
-            self.black_attack = self.last_attack;
-            self.black_pins = self.last_pin;
+    pub fn undo_move(&mut self, chess_move: ChessMove) {
+        self.is_white_turn = !self.is_white_turn;
+        if chess_move.castle_flag {
+            todo!("do stuff")
+        } else if chess_move.en_passant_flag {
+            self.board[chess_move.from as usize] = self.board[chess_move.to as usize];
+            self.board[chess_move.to as usize] = Piece::Empty;
+            if self.is_white_turn {
+                self.en_passant = chess_move.to + 8;
+                self.board[self.en_passant as usize] = Piece::Bpawn;
+            } else {
+                self.en_passant = chess_move.to - 8;
+                self.board[self.en_passant as usize] = Piece::Wpawn;
+            }
         }
+        self.board[chess_move.from as usize] = self.board[chess_move.to as usize];
+        self.board[chess_move.to as usize] = chess_move.captured_piece;
+        self.en_passant = 65;
     }
     pub fn update_attacked_squares(&mut self) {
         //change a few things: 1. pawns attack are only captures
@@ -300,7 +303,7 @@ impl Chess {
             self.black_attack = attacked_squares;
         }
     }
-    pub fn gen_moves(&mut self, index: usize, castling: bool) -> Vec<usize> {
+    pub fn gen_moves(&mut self, index: usize, castling: bool) -> Vec<u8> {
         match self.board[index] {
             Piece::Wking | Piece::Bking => self.gen_moves_king(index),
             Piece::Wqueen | Piece::Bqueen => {
@@ -319,71 +322,69 @@ impl Chess {
         self.moves = self
             .gen_moves(index, true)
             .iter()
-            .filter(|&&move_index| self.is_legal(index, move_index))
+            .filter(|&&move_index| self.is_legal(index as u8, move_index))
             .cloned()
             .collect()
     }
-    pub fn gen_castling_king(&mut self, index: usize, castling: bool) -> Vec<usize> {
+    pub fn gen_castling_king(&self, index: usize) -> Vec<u8> {
         let mut moves = vec![];
         let piece = self.board[index];
-        if castling {
-            if !piece.is_white() {
-                if self.castling[2]
-                    && self.board[5] == Piece::Empty
-                    && self.board[6] == Piece::Empty
-                    && self.board[7] == Piece::Brook
-                    && !self.is_check(4)
-                    && !self.is_check(5)
-                    && !self.is_check(6)
-                {
-                    moves.push(6);
-                }
-                if self.castling[3]
-                    && self.board[3] == Piece::Empty
-                    && self.board[2] == Piece::Empty
-                    && self.board[1] == Piece::Empty
-                    && self.board[0] == Piece::Brook
-                    && !self.is_check(4)
-                    && !self.is_check(3)
-                    && !self.is_check(2)
-                {
-                    moves.push(2);
-                }
-            } else {
-                if self.castling[0]
-                    && self.board[61] == Piece::Empty
-                    && self.board[62] == Piece::Empty
-                    && self.board[63] == Piece::Wrook
-                    && !self.is_check(60)
-                    && !self.is_check(61)
-                    && !self.is_check(62)
-                {
-                    moves.push(62);
-                }
-                if self.castling[1]
-                    && self.board[59] == Piece::Empty
-                    && self.board[58] == Piece::Empty
-                    && self.board[57] == Piece::Empty
-                    && self.board[56] == Piece::Wrook
-                    && !self.is_check(60)
-                    && !self.is_check(59)
-                    && !self.is_check(58)
-                {
-                    moves.push(58);
-                }
+        if !piece.is_white() {
+            if self.castling[2]
+                && self.board[5] == Piece::Empty
+                && self.board[6] == Piece::Empty
+                && self.board[7] == Piece::Brook
+                && !self.is_check(4)
+                && !self.is_check(5)
+                && !self.is_check(6)
+            {
+                moves.push(6);
+            }
+            if self.castling[3]
+                && self.board[3] == Piece::Empty
+                && self.board[2] == Piece::Empty
+                && self.board[1] == Piece::Empty
+                && self.board[0] == Piece::Brook
+                && !self.is_check(4)
+                && !self.is_check(3)
+                && !self.is_check(2)
+            {
+                moves.push(2);
+            }
+        } else {
+            if self.castling[0]
+                && self.board[61] == Piece::Empty
+                && self.board[62] == Piece::Empty
+                && self.board[63] == Piece::Wrook
+                && !self.is_check(60)
+                && !self.is_check(61)
+                && !self.is_check(62)
+            {
+                moves.push(62);
+            }
+            if self.castling[1]
+                && self.board[59] == Piece::Empty
+                && self.board[58] == Piece::Empty
+                && self.board[57] == Piece::Empty
+                && self.board[56] == Piece::Wrook
+                && !self.is_check(60)
+                && !self.is_check(59)
+                && !self.is_check(58)
+            {
+                moves.push(58);
             }
         }
         moves
     }
-    fn gen_moves_rook(&self, index: usize) -> Vec<usize> {
-        let mut moves = Vec::new();
+    fn gen_moves_rook(&self, index: usize) -> Vec<u8> {
+        let mut moves: Vec<u8> = Vec::new();
         let piece = self.board[index];
-        let row = index / 8;
-        let col = index % 8;
+        let row = index as u8 / 8;
+        let col = index as u8 % 8;
         // Check horizontally to the right
         for c in (col + 1)..8 {
             let new_index = row * 8 + c;
-            let new_piece = self.board[new_index];
+            let new_piece = self.board[new_index as usize];
             if new_piece == Piece::Empty {
                 moves.push(new_index);
             } else if self.is_opponent_piece(new_piece, piece) {
@@ -396,7 +397,7 @@ impl Chess {
         // Check horizontally to the left
         for c in (0..col).rev() {
             let new_index = row * 8 + c;
-            let new_piece = self.board[new_index];
+            let new_piece = self.board[new_index as usize];
             if new_piece == Piece::Empty {
                 moves.push(new_index);
             } else if self.is_opponent_piece(new_piece, piece) {
@@ -409,7 +410,7 @@ impl Chess {
         // Check vertically upwards
         for r in (0..row).rev() {
             let new_index = r * 8 + col;
-            let new_piece = self.board[new_index];
+            let new_piece = self.board[new_index as usize];
             if new_piece == Piece::Empty {
                 moves.push(new_index);
             } else if self.is_opponent_piece(new_piece, piece) {
@@ -422,8 +423,8 @@ impl Chess {
         // Check vertically downwards
         for r in (row + 1)..8 {
             let new_index = r * 8 + col;
-            let new_piece = self.board[new_index];
-            if new_piece == Piece::Empty {
+            let new_piece = self.board[new_index as usize];
+            if self.board[new_index as usize] == Piece::Empty {
                 moves.push(new_index);
             } else if self.is_opponent_piece(new_piece, piece) {
                 moves.push(new_index);
@@ -434,11 +435,11 @@ impl Chess {
         }
         moves
     }
-    fn gen_moves_bishop(&self, index: usize) -> Vec<usize> {
-        let mut moves = Vec::new();
+    fn gen_moves_bishop(&self, index: usize) -> Vec<u8> {
+        let mut moves: Vec<u8> = Vec::new();
         let piece = self.board[index];
-        let row = index / 8;
-        let col = index % 8;
+        let row = index as u8 / 8;
+        let col = index as u8 % 8;
         // Define the possible bishop moves in terms of row and column offsets
         let offsets: [(i32, i32); 4] = [
             (-1, -1), // Up-left
@@ -452,8 +453,8 @@ impl Chess {
             let mut new_col = col as i32 + col_offset;
             // Keep moving in the diagonal direction until out of bounds or blocked
             while (0..8).contains(&new_row) && (0..8).contains(&new_col) {
-                let new_index = (new_row * 8 + new_col) as usize;
-                let new_piece = self.board[new_index];
+                let new_index = (new_row * 8 + new_col) as u8;
+                let new_piece = self.board[new_index as usize];
                 if new_piece == Piece::Empty {
                     moves.push(new_index);
                 } else if self.is_opponent_piece(new_piece, piece) {
@@ -468,33 +469,33 @@ impl Chess {
         }
         moves
     }
-    pub fn generate_attacks(&mut self, index: usize) -> Vec<usize> {
+    pub fn generate_attacks(&mut self, index: usize) -> Vec<u8> {
         match self.board[index] {
             Piece::Wking | Piece::Bking => self.gen_attacks_king(index),
             Piece::Wqueen | Piece::Bqueen => {
-                let mut moves = self.gen_attacks_rook(index);
-                moves.extend(self.gen_attacks_bishop(index));
+                let mut moves = self.gen_attacks_rook(index as u8);
+                moves.extend(self.gen_attacks_bishop(index as u8));
                 moves
             }
-            Piece::Wrook | Piece::Brook => self.gen_attacks_rook(index),
-            Piece::Wbishop | Piece::Bbishop => self.gen_attacks_bishop(index),
+            Piece::Wrook | Piece::Brook => self.gen_attacks_rook(index as u8),
+            Piece::Wbishop | Piece::Bbishop => self.gen_attacks_bishop(index as u8),
             Piece::Wknight | Piece::Bknight => self.gen_attacks_knight(index),
             Piece::Wpawn | Piece::Bpawn => self.gen_attacks_pawn(index),
             _ => Vec::new(),
         }
     }
-    pub fn gen_attacks_rook(&mut self, index: usize) -> Vec<usize> {
+    pub fn gen_attacks_rook(&mut self, index: u8) -> Vec<u8> {
         let row = index / 8;
         let col = index % 8;
         let mut pin_squares = Bitboard::empty();
         pin_squares.set_bit(index);
-        let mut moves: Vec<usize> = Vec::new();
+        let mut moves: Vec<u8> = Vec::new();
         // Check horizontally to the right
         let mut piece_count = 0;
         let mut met_king = false;
         for c in (col + 1)..8 {
             let new_index = row * 8 + c;
-            let new_piece = self.board[new_index];
+            let new_piece = self.board[new_index as usize];
             if new_piece == Piece::Empty && piece_count == 0 {
                 moves.push(new_index);
                 pin_squares.switch_on_index(new_index);
@@ -503,7 +504,9 @@ impl Chess {
                 if new_piece == Piece::Bking || new_piece == Piece::Wking {
                     if piece_count == 0 {
                         moves.push(new_index);
-                        moves.push(new_index + 1);
+                        if new_index < 63 {
+                            moves.push(new_index + 1);
+                        }
                         self.checking_pieces.push(index);
                     }
                     pin_squares.switch_on_index(new_index);
@@ -539,7 +542,7 @@ impl Chess {
         met_king = false;
         for c in (0..col).rev() {
             let new_index = row * 8 + c;
-            let new_piece = self.board[new_index];
+            let new_piece = self.board[new_index as usize];
             if new_piece == Piece::Empty && piece_count == 0 {
                 moves.push(new_index);
                 pin_squares.switch_on_index(new_index);
@@ -586,7 +589,7 @@ impl Chess {
         met_king = false;
         for r in (0..row).rev() {
             let new_index = r * 8 + col;
-            let new_piece = self.board[new_index];
+            let new_piece = self.board[new_index as usize];
             if new_piece == Piece::Empty && piece_count == 0 {
                 moves.push(new_index);
                 pin_squares.switch_on_index(new_index);
@@ -633,7 +636,7 @@ impl Chess {
         met_king = false;
         for r in (row + 1)..8 {
             let new_index = r * 8 + col;
-            let new_piece = self.board[new_index];
+            let new_piece = self.board[new_index as usize];
             if new_piece == Piece::Empty && piece_count == 0 {
                 moves.push(new_index);
                 pin_squares.switch_on_index(new_index);
@@ -642,7 +645,9 @@ impl Chess {
                 if new_piece == Piece::Bking || new_piece == Piece::Wking {
                     if piece_count == 0 {
                         moves.push(new_index);
-                        moves.push(new_index + 8);
+                        if new_index < 56 {
+                            moves.push(new_index + 8);
+                        }
                         self.checking_pieces.push(index);
                     }
                     pin_squares.switch_on_index(new_index);
@@ -672,12 +677,12 @@ impl Chess {
         }
         moves
     }
-    pub fn gen_attacks_bishop(&mut self, index: usize) -> Vec<usize> {
+    pub fn gen_attacks_bishop(&mut self, index: u8) -> Vec<u8> {
         let row = index / 8;
         let col = index % 8;
         let mut pin_squares = Bitboard::empty();
         pin_squares.set_bit(index);
-        let mut moves: Vec<usize> = Vec::new();
+        let mut moves: Vec<u8> = Vec::new();
 
         // Check diagonally to the top-right
         let mut piece_count = 0;
@@ -689,29 +694,31 @@ impl Chess {
                 let new_index = (r * 8 + c) as usize;
                 let new_piece = self.board[new_index];
                 if new_piece == Piece::Empty && piece_count == 0 {
-                    moves.push(new_index);
-                    pin_squares.switch_on_index(new_index);
+                    moves.push(new_index as u8);
+                    pin_squares.switch_on_index(new_index as u8);
                 } else if new_piece.is_white() != self.is_white_turn {
                     // Enemy piece
                     if new_piece == Piece::Bking || new_piece == Piece::Wking {
                         if piece_count == 0 {
-                            moves.push(new_index);
-                            moves.push(new_index + 9);
+                            moves.push(new_index as u8);
+                            if new_index < 55 {
+                                moves.push(new_index as u8 + 9);
+                            }
                             self.checking_pieces.push(index);
                         }
-                        pin_squares.switch_on_index(new_index);
+                        pin_squares.switch_on_index(new_index as u8);
                         met_king = true;
                         break; // No need to consider further moves in this direction
                     }
                     piece_count += 1;
-                    pin_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index as u8);
                     if piece_count == 1 {
-                        moves.push(new_index);
+                        moves.push(new_index as u8);
                     }
                 } else {
                     // Friendly piece
                     if piece_count == 0 {
-                        moves.push(new_index);
+                        moves.push(new_index as u8);
                     }
                     break; // Stop considering further moves in this direction
                 }
@@ -740,29 +747,31 @@ impl Chess {
                 let new_index = (r * 8 + c) as usize;
                 let new_piece = self.board[new_index];
                 if new_piece == Piece::Empty && piece_count == 0 {
-                    moves.push(new_index);
-                    pin_squares.switch_on_index(new_index);
+                    moves.push(new_index as u8);
+                    pin_squares.switch_on_index(new_index as u8);
                 } else if new_piece.is_white() != self.is_white_turn {
                     // Enemy piece
                     if new_piece == Piece::Bking || new_piece == Piece::Wking {
                         if piece_count == 0 {
-                            moves.push(new_index + 7);
-                            moves.push(new_index);
+                            if new_index < 57 {
+                                moves.push(new_index as u8 + 7);
+                            }
+                            moves.push(new_index as u8);
                             self.checking_pieces.push(index);
                         }
-                        pin_squares.switch_on_index(new_index);
+                        pin_squares.switch_on_index(new_index as u8);
                         met_king = true;
                         break; // No need to consider further moves in this direction
                     }
                     piece_count += 1;
-                    pin_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index as u8);
                     if piece_count == 1 {
-                        moves.push(new_index);
+                        moves.push(new_index as u8);
                     }
                 } else {
                     // Friendly piece
                     if piece_count == 0 {
-                        moves.push(new_index);
+                        moves.push(new_index as u8);
                     }
                     break; // Stop considering further moves in this direction
                 }
@@ -791,31 +800,31 @@ impl Chess {
                 let new_index = (r * 8 + c) as usize;
                 let new_piece = self.board[new_index];
                 if new_piece == Piece::Empty && piece_count == 0 {
-                    moves.push(new_index);
-                    pin_squares.switch_on_index(new_index);
+                    moves.push(new_index as u8);
+                    pin_squares.switch_on_index(new_index as u8);
                 } else if new_piece.is_white() != self.is_white_turn {
                     // Enemy piece
                     if new_piece == Piece::Bking || new_piece == Piece::Wking {
                         if piece_count == 0 {
-                            moves.push(new_index);
+                            moves.push(new_index as u8);
                             if new_index >= 7 {
-                                moves.push(new_index - 7);
+                                moves.push(new_index as u8 - 7);
                             }
                             self.checking_pieces.push(index);
                         }
-                        pin_squares.switch_on_index(new_index);
+                        pin_squares.switch_on_index(new_index as u8);
                         met_king = true;
                         break; // No need to consider further moves in this direction
                     }
                     piece_count += 1;
-                    pin_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index as u8);
                     if piece_count == 1 {
-                        moves.push(new_index);
+                        moves.push(new_index as u8);
                     }
                 } else {
                     // Friendly piece
                     if piece_count == 0 {
-                        moves.push(new_index);
+                        moves.push(new_index as u8);
                     }
                     break; // Stop considering further moves in this direction
                 }
@@ -844,31 +853,31 @@ impl Chess {
                 let new_index = (r * 8 + c) as usize;
                 let new_piece = self.board[new_index];
                 if new_piece == Piece::Empty && piece_count == 0 {
-                    moves.push(new_index);
-                    pin_squares.switch_on_index(new_index);
+                    moves.push(new_index as u8);
+                    pin_squares.switch_on_index(new_index as u8);
                 } else if new_piece.is_white() != self.is_white_turn {
                     // Enemy piece
                     if new_piece == Piece::Bking || new_piece == Piece::Wking {
                         if piece_count == 0 {
-                            moves.push(new_index);
+                            moves.push(new_index as u8);
                             if new_index >= 9 {
-                                moves.push(new_index - 9);
+                                moves.push(new_index as u8 - 9);
                             }
                             self.checking_pieces.push(index);
                         }
-                        pin_squares.switch_on_index(new_index);
+                        pin_squares.switch_on_index(new_index as u8);
                         met_king = true;
                         break; // No need to consider further moves in this direction
                     }
                     piece_count += 1;
-                    pin_squares.switch_on_index(new_index);
+                    pin_squares.switch_on_index(new_index as u8);
                     if piece_count == 1 {
-                        moves.push(new_index);
+                        moves.push(new_index as u8);
                     }
                 } else {
                     // Friendly piece
                     if piece_count == 0 {
-                        moves.push(new_index);
+                        moves.push(new_index as u8);
                     }
                     break; // Stop considering further moves in this direction
                 }
@@ -900,18 +909,22 @@ impl Chess {
         // Return true if the game is in a draw due to threefold repetition
         false
     }
-    pub fn get_all_moves(&mut self) -> Vec<(usize, usize)> {
-        let mut moves: Vec<(usize, usize)> = Vec::new();
+    pub fn get_all_moves(&mut self) -> Vec<(u8, u8)> {
+        let mut moves: Vec<(u8, u8)> = Vec::new();
         for i in 0..64 {
             if self.board[i].is_white() == self.is_white_turn {
                 self.get_legals(i);
-                moves.extend(std::mem::take(&mut self.moves).into_iter().map(|x| (i, x)));
+                moves.extend(
+                    std::mem::take(&mut self.moves)
+                        .into_iter()
+                        .map(|x| (i as u8, x)),
+                );
             }
         }
         moves
     }
-    pub fn precompute_knight() -> [[usize; 8]; 64] {
-        let mut precomputed_moves: [[usize; 8]; 64] = [[64; 8]; 64];
+    pub fn precompute_knight() -> [[u8; 8]; 64] {
+        let mut precomputed_moves: [[u8; 8]; 64] = [[64; 8]; 64];
         let offsets: [(i32, i32); 8] = [
             (-2, -1),
             (-1, 2),
@@ -931,52 +944,52 @@ impl Chess {
                 let new_col = col as i32 + col_offset;
                 // Check if the new position is within the board boundaries
                 if (0..8).contains(&new_row) && (0..8).contains(&new_col) {
-                    val[index] = (new_row * 8 + new_col) as usize;
+                    val[index] = (new_row * 8 + new_col) as u8;
                 }
             }
         }
         precomputed_moves
     }
-    pub fn gen_moves_knight(&self, index: usize) -> Vec<usize> {
+    pub fn gen_moves_knight(&self, index: usize) -> Vec<u8> {
         self.knight_moves[index]
             .into_iter()
-            .filter(|&i| i != 64 && self.board[i].is_opponent_or_empty(self.board[index]))
+            .filter(|&i| i != 64 && self.board[i as usize].is_opponent_or_empty(self.board[index]))
             .collect()
     }
-    pub fn gen_attacks_knight(&mut self, index: usize) -> Vec<usize> {
+    pub fn gen_attacks_knight(&mut self, index: usize) -> Vec<u8> {
         self.knight_moves[index]
             .into_iter()
             .filter(|&i| i != 64)
             .map(|i| {
-                if (self.board[index].is_white() && self.board[i] == Piece::Bking)
-                    || (!self.board[index].is_white() && self.board[i] == Piece::Wking)
+                if (self.board[index].is_white() && self.board[i as usize] == Piece::Bking)
+                    || (!self.board[index].is_white() && self.board[i as usize] == Piece::Wking)
                 {
-                    self.checking_pieces.push(index)
+                    self.checking_pieces.push(index as u8)
                 }
                 i
             })
             .collect()
     }
-    pub fn precompute_pawn() -> [[usize; 4]; 128] {
+    pub fn precompute_pawn() -> [[u8; 4]; 128] {
         //twice forward, once forward, left capture, right capture
-        let mut precomputed_moves: [[usize; 4]; 128] = [[64; 4]; 128];
+        let mut precomputed_moves: [[u8; 4]; 128] = [[64; 4]; 128];
         // White Pawns
         for (square, moves) in precomputed_moves.iter_mut().enumerate().skip(8).take(64) {
             // White Pawns
-            let row: usize = square / 8;
-            let col: usize = square % 8;
+            let row: u8 = square as u8 / 8;
+            let col: u8 = square as u8 % 8;
             // Two squares forward (if on starting row)
             if row == 6 {
-                moves[0] = square - 16;
+                moves[0] = square as u8 - 16;
             }
             // One square forward
-            moves[1] = square - 8;
+            moves[1] = square as u8 - 8;
             // Diagonal captures
             if col > 0 {
-                moves[2] = square - 9; // Diagonal capture to the left
+                moves[2] = square as u8 - 9; // Diagonal capture to the left
             }
             if col < 7 {
-                moves[3] = square - 7; // Diagonal capture to the right
+                moves[3] = square as u8 - 7; // Diagonal capture to the right
             }
         }
         // Black Pawns
@@ -987,66 +1000,69 @@ impl Chess {
 
             // Two squares forward (if on starting row)
             if row == 1 {
-                moves[0] = square + 16;
+                moves[0] = square as u8 + 16;
             }
 
             // One square forward
-            moves[1] = square + 8;
+            moves[1] = square as u8 + 8;
 
             // Diagonal captures
             if col > 0 {
-                moves[2] = square + 7; // Diagonal capture to the left
+                moves[2] = square as u8 + 7; // Diagonal capture to the left
             }
             if col < 7 {
-                moves[3] = square + 9; // Diagonal capture to the right
+                moves[3] = square as u8 + 9; // Diagonal capture to the right
             }
         }
         precomputed_moves
     }
-    pub fn gen_moves_pawn(&self, index: usize) -> Vec<usize> {
+    pub fn gen_moves_pawn(&self, index: usize) -> Vec<u8> {
         let mut moves = Vec::new();
         let color_offset = if self.board[index].is_white() { 0 } else { 64 };
         let pawn_moves = &self.pawn_moves[index + color_offset];
 
         // Check the first move (single square forward)
-        if pawn_moves[1] != 64 && self.board[pawn_moves[1]] == Piece::Empty {
+        if pawn_moves[1] != 64 && self.board[pawn_moves[1] as usize] == Piece::Empty {
             moves.push(pawn_moves[1]);
             // Check the second move (double square forward from starting position)
-            if pawn_moves[0] != 64 && self.board[pawn_moves[0]] == Piece::Empty {
+            if pawn_moves[0] != 64 && self.board[pawn_moves[0] as usize] == Piece::Empty {
                 moves.push(pawn_moves[0]);
             }
         }
         // Check the two diagonal capture moves
-        if pawn_moves[2] != 64 && self.board[pawn_moves[2]].is_opponent(self.board[index])
-            || self.en_passant == pawn_moves[2]
+        if pawn_moves[2] != 64
+            && (self.board[pawn_moves[2] as usize].is_opponent(self.board[index])
+                || self.en_passant == pawn_moves[2])
         {
             moves.push(pawn_moves[2]);
         }
-        if pawn_moves[3] != 64 && self.board[pawn_moves[3]].is_opponent(self.board[index])
-            || self.en_passant == pawn_moves[3]
+        if pawn_moves[3] != 64
+            && (self.board[pawn_moves[3] as usize].is_opponent(self.board[index])
+                || self.en_passant == pawn_moves[3])
         {
             moves.push(pawn_moves[3]);
         }
         moves
     }
-    pub fn gen_attacks_pawn(&mut self, index: usize) -> Vec<usize> {
+    pub fn gen_attacks_pawn(&mut self, index: usize) -> Vec<u8> {
         let color_offset = if self.board[index].is_white() { 0 } else { 64 };
         let pawn_moves = &self.pawn_moves[index + color_offset];
         let mut attacking_moves = Vec::with_capacity(2);
         for &move_index in pawn_moves.iter().skip(2) {
-            if move_index < 64 && self.board[move_index].is_opponent(self.board[index]) {
+            if move_index < 64 && self.board[move_index as usize].is_opponent(self.board[index]) {
                 attacking_moves.push(move_index);
-                if (self.board[index].is_white() && self.board[move_index] == Piece::Bking)
-                    || (!self.board[index].is_white() && self.board[move_index] == Piece::Wking)
+                if (self.board[index].is_white() && self.board[move_index as usize] == Piece::Bking)
+                    || (!self.board[index].is_white()
+                        && self.board[move_index as usize] == Piece::Wking)
                 {
-                    self.checking_pieces.push(index);
+                    self.checking_pieces.push(index as u8);
                 }
             }
         }
         attacking_moves
-    }
-    fn precompute_king() -> [[usize; 8]; 64] {
-        let mut precomputed_moves: [[usize; 8]; 64] = [[64; 8]; 64];
+    } // might be broken
+    fn precompute_king() -> [[u8; 8]; 64] {
+        let mut precomputed_moves: [[u8; 8]; 64] = [[64; 8]; 64];
         let offsets: [(i32, i32); 8] = [
             (-1, -1),
             (-1, 0),
@@ -1058,26 +1074,27 @@ impl Chess {
             (1, 1),
         ];
         for (square, moves) in precomputed_moves.iter_mut().enumerate() {
-            let row = square / 8;
-            let col = square % 8;
+            let row = square as u8 / 8;
+            let col = square as u8 % 8;
             for (index, &(row_offset, col_offset)) in offsets.iter().enumerate() {
                 let new_row = row as i32 + row_offset;
                 let new_col = col as i32 + col_offset;
                 // Check if the new position is within the board boundaries
                 if (0..8).contains(&new_row) && (0..8).contains(&new_col) {
-                    moves[index] = (new_row * 8 + new_col) as usize;
+                    moves[index] = (new_row * 8 + new_col) as u8;
                 }
             }
         }
         precomputed_moves
     }
-    pub fn gen_moves_king(&self, index: usize) -> Vec<usize> {
-        self.king_moves[index]
-            .into_iter()
-            .filter(|&i| i != 64 && self.board[i].is_opponent_or_empty(self.board[index]))
-            .collect()
+    pub fn gen_moves_king(&self, index: usize) -> Vec<u8> {
+        let mut moves = self.gen_castling_king(index);
+        moves.extend(self.king_moves[index].into_iter().filter(|&i| {
+            i != 64 && self.board[i as usize].is_opponent_or_empty(self.board[index])
+        }));
+        moves
     }
-    pub fn gen_attacks_king(&mut self, index: usize) -> Vec<usize> {
+    pub fn gen_attacks_king(&mut self, index: usize) -> Vec<u8> {
         self.king_moves[index]
             .into_iter()
             .filter(|&i| i != 64)
@@ -1164,4 +1181,12 @@ impl Piece {
         }
         self.is_white() != other.is_white()
     }
+}
+
+pub struct ChessMove {
+    pub from: u8,
+    pub to: u8,
+    pub castle_flag: bool,
+    pub en_passant_flag: bool,
+    pub captured_piece: Piece, // Stores the captured piece, if any
 }

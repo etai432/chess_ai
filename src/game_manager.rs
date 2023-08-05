@@ -75,7 +75,7 @@ impl GameManager {
             }
         }
     }
-    fn draw_move(&self, from: usize, to: usize) {
+    fn draw_move(&self, from: u8, to: u8) {
         if (0..64).contains(&from) && (0..64).contains(&to) {
             let from_x = (from % 8) as f32 * 100.0 + self.pos.0;
             let from_y = (from / 8) as f32 * 100.0 + self.pos.1;
@@ -95,6 +95,7 @@ impl GameManager {
     pub fn draw(&self) {
         //switch to move later
         draw_texture(self.textures[0], self.pos.0, self.pos.1, WHITE);
+        self.draw_bitboard(Bitboard::from_index(self.chess.en_passant));
         self.draw_move(self.chess.last_move.0, self.chess.last_move.1);
         self.draw_check();
         for (i, piece) in self.chess.board.iter().enumerate() {
@@ -182,10 +183,10 @@ impl GameManager {
     }
     pub fn draw_moves(&self) {
         for i in self.chess.moves.clone() {
-            if self.chess.board[i] == Piece::Empty {
+            if self.chess.board[i as usize] == Piece::Empty {
                 draw_circle(
-                    50.0 + (i % 8 * 100) as f32 + self.pos.0,
-                    50.0 + (i / 8 * 100) as f32 + self.pos.1,
+                    50.0 + (i as i32 % 8 * 100) as f32 + self.pos.0,
+                    50.0 + (i as i32 / 8 * 100) as f32 + self.pos.1,
                     20.0,
                     Color {
                         r: 0.4,
@@ -196,8 +197,8 @@ impl GameManager {
                 );
             } else {
                 draw_circle_lines(
-                    50.0 + (i % 8 * 100) as f32 + self.pos.0,
-                    50.0 + (i / 8 * 100) as f32 + self.pos.1,
+                    50.0 + (i as i32 % 8 * 100) as f32 + self.pos.0,
+                    50.0 + (i as i32 / 8 * 100) as f32 + self.pos.1,
                     49.0,
                     7.0,
                     Color {
@@ -245,9 +246,10 @@ impl GameManager {
                     }
                     self.get_mouse_pos();
                     if self.mouse_pos.is_some()
-                        && self.chess.moves.contains(&self.mouse_pos.unwrap())
+                        && self.chess.moves.contains(&(self.mouse_pos.unwrap() as u8))
                     {
-                        self.chess.move_piece(piece_index, self.mouse_pos.unwrap());
+                        self.chess
+                            .move_piece(piece_index as u8, self.mouse_pos.unwrap() as u8);
                         self.chess.moves = vec![];
                         break;
                     }

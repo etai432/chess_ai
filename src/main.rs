@@ -27,40 +27,49 @@ pub fn window_conf() -> Conf {
     }
 }
 
-#[macroquad::main(window_conf)]
-async fn main() {
-    menu().await;
+// #[macroquad::main(window_conf)]
+// async fn main() {
+//     std::env::set_var("RUST_BACKTRACE", "1");
+//     menu().await;
+// }
+
+fn main() {
+    // test_move_generation_speed(5)
+    benchmark_chess();
 }
 
-// fn main() {
-//     // test_move_generation_speed(5)
-//     benchmark_chess();
-// }
+fn benchmark_chess() {
+    // Initialize chessboard
+    let mut chess = Chess::new();
+    // Measure time for move_gen
+    let start_time_move_gen = Instant::now();
+    chess.get_all_moves();
+    let elapsed_time_move_gen = start_time_move_gen.elapsed();
 
-// fn benchmark_chess() {
-//     // Initialize chessboard
-//     let mut chess = Chess::new();
+    // Measure time for move_piece
+    let start_time_move_piece = Instant::now();
+    let chess_move = chess.move_piece(48, 40);
+    let elapsed_time_move_piece = start_time_move_piece.elapsed();
 
-//     // Measure time for test_knight_moves(21)
-//     let start_time_test_moves = Instant::now();
-//     let _test_moves = chess.gen_attacks_king(21);
-//     let elapsed_time_test_moves = start_time_test_moves.elapsed();
+    // Measure time for undo_move
+    let start_time_undo_move = Instant::now();
+    chess.undo_move(chess_move);
+    let elapsed_time_undo_move = start_time_undo_move.elapsed();
 
-//     // Measure time for gen_moves_knight(21)
-//     let start_time_gen_moves = Instant::now();
-//     let _test_moves = chess.gen_attacks_king_v2(21);
-//     let elapsed_time_gen_moves = start_time_gen_moves.elapsed();
+    // Measure time for update_attacked_squares
+    let start_time_update_attacked_squares = Instant::now();
+    chess.update_attacked_squares();
+    let elapsed_time_update_attacked_squares = start_time_update_attacked_squares.elapsed();
 
-//     // Print the elapsed times
-//     println!(
-//         "gen_attacks_knight(21) elapsed time: {:?}",
-//         elapsed_time_test_moves
-//     );
-//     println!(
-//         "gen_attacks_knight_v2(21) elapsed time: {:?}",
-//         elapsed_time_gen_moves
-//     );
-// }
+    // Print the elapsed times
+    println!("move_gen elapsed time: {:?}", elapsed_time_move_gen);
+    println!("move_piece elapsed time: {:?}", elapsed_time_move_piece);
+    println!("undo_move elapsed time: {:?}", elapsed_time_undo_move);
+    println!(
+        "update_attacked_squares elapsed time: {:?}",
+        elapsed_time_update_attacked_squares
+    );
+}
 
 // fn test_move_generation_speed(depth_ai: i32) {
 //     let start_time = Instant::now();
@@ -271,25 +280,14 @@ enum Pv {
     Pvp,
     Pvai,
 }
-//todo:
-//chess: done for now <- L bozo thought he was done
-//ai: best move
-//game:
-//ai turn (after ai)
 //game endings: Draw by Insufficient Material, Draw by Threefold Repetition, Draw by Fifty-Move Rule, Time Forfeit (also make them useful in a game)
-//make timers functional
-//graphics:
-//add pieces to the side of the menu
-//make a game title that indicates whos turn it is and the winner. after a game won. back to menu screen (maybe restart)
-//crown for the winner (funny little bonus)
 
 //todo list:
 //game endings- timers, threefold, insufficient
-//crowns and winner titles
+//winner titles
 //bugs go here:
-//checking white/black crashes game
-//handle castling and hella debug the game. maybe even using the stockfish thing
-//undo move!! using a move struct. also split the make_move according to the move struct.
+//en passant did not take the pawn
+//handle castling
 //better ai
 //optimazing- maybe use magic bitboards for sliding pieces idfk- much later. also look for what else i can optimize:
 //maybe if ai not good enough, try magic bitboards
