@@ -292,7 +292,7 @@ impl Chess {
         self.checking_pieces = Vec::new();
         let mut attacked_squares = Bitboard::empty();
         for (i, piece) in self.board.into_iter().enumerate() {
-            if piece.is_white() == self.is_white_turn {
+            if piece.is_white() == self.is_white_turn && piece != Piece::Empty {
                 // we want all moves, even if they cant actually move there
                 attacked_squares.switch_on_indices(&self.generate_attacks(i));
             }
@@ -376,7 +376,7 @@ impl Chess {
         }
         moves
     }
-    fn gen_moves_rook(&self, index: usize) -> Vec<u8> {
+    pub fn gen_moves_rook(&self, index: usize) -> Vec<u8> {
         let mut moves: Vec<u8> = Vec::new();
         let piece = self.board[index];
         let row = index as u8 / 8;
@@ -435,7 +435,7 @@ impl Chess {
         }
         moves
     }
-    fn gen_moves_bishop(&self, index: usize) -> Vec<u8> {
+    pub fn gen_moves_bishop(&self, index: usize) -> Vec<u8> {
         let mut moves: Vec<u8> = Vec::new();
         let piece = self.board[index];
         let row = index as u8 / 8;

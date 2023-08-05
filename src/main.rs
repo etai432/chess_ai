@@ -46,6 +46,16 @@ fn benchmark_chess() {
     chess.get_all_moves();
     let elapsed_time_move_gen = start_time_move_gen.elapsed();
 
+    let start_time_rook_bishop = Instant::now();
+    chess.gen_moves_rook(28);
+    chess.gen_moves_bishop(28);
+    let elapsed_time_rook_bishop = start_time_rook_bishop.elapsed();
+
+    // Measure time for update_attacked_squares
+    let start_time_update_attacked_squares = Instant::now();
+    chess.update_attacked_squares();
+    let elapsed_time_update_attacked_squares = start_time_update_attacked_squares.elapsed();
+
     // Measure time for move_piece
     let start_time_move_piece = Instant::now();
     let chess_move = chess.move_piece(48, 40);
@@ -56,19 +66,15 @@ fn benchmark_chess() {
     chess.undo_move(chess_move);
     let elapsed_time_undo_move = start_time_undo_move.elapsed();
 
-    // Measure time for update_attacked_squares
-    let start_time_update_attacked_squares = Instant::now();
-    chess.update_attacked_squares();
-    let elapsed_time_update_attacked_squares = start_time_update_attacked_squares.elapsed();
-
     // Print the elapsed times
     println!("move_gen elapsed time: {:?}", elapsed_time_move_gen);
-    println!("move_piece elapsed time: {:?}", elapsed_time_move_piece);
-    println!("undo_move elapsed time: {:?}", elapsed_time_undo_move);
+    println!("rook_bishop elapsed time: {:?}", elapsed_time_rook_bishop);
     println!(
         "update_attacked_squares elapsed time: {:?}",
         elapsed_time_update_attacked_squares
     );
+    println!("move_piece elapsed time: {:?}", elapsed_time_move_piece);
+    println!("undo_move elapsed time: {:?}", elapsed_time_undo_move);
 }
 
 // fn test_move_generation_speed(depth_ai: i32) {
