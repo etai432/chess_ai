@@ -4,18 +4,19 @@ use std::f32::INFINITY;
 #[derive(Debug, Clone)]
 pub struct AI {
     depth: i32, //ms
+    is_white: bool,
 }
 
 impl AI {
-    pub fn new(depth: i32) -> Self {
-        AI { depth }
+    pub fn new(depth: i32, is_white: bool) -> Self {
+        AI { depth, is_white }
     }
-    pub fn best_move(&mut self, mut chess: Chess) -> (u8, u8) {
+    pub fn best_move(&mut self, chess: &mut Chess) -> (u8, u8) {
         let mut max = -INFINITY;
         let mut best_move = (64, 64);
         for (from, to) in chess.get_all_moves() {
             let chess_move = chess.move_piece(from, to);
-            let eval = -self.search(self.depth - 1, -INFINITY, INFINITY, &mut chess);
+            let eval = -self.search(self.depth - 1, -INFINITY, INFINITY, chess);
             chess.undo_move(chess_move);
             if eval > max {
                 max = eval;
@@ -51,7 +52,7 @@ impl AI {
         for piece in &chess.board {
             eval += piece.evaluate();
         }
-        if chess.is_white_turn {
+        if !self.is_white {
             eval
         } else {
             -eval

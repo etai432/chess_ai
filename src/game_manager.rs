@@ -4,7 +4,7 @@ use crate::chess::{Chess, Piece};
 use crate::BlackWhite;
 use macroquad::prelude::*;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub struct GameManager {
     pub ai: AI,
@@ -20,7 +20,7 @@ pub struct GameManager {
 impl GameManager {
     pub fn new(start: f32, add: f32, ai_depth: Option<i32>, player_vs_ai: BlackWhite) -> Self {
         let mut g = GameManager {
-            ai: AI::new(ai_depth.unwrap_or(1)),
+            ai: AI::new(ai_depth.unwrap_or(1), player_vs_ai == BlackWhite::White),
             chess: Chess::new(),
             mouse_pos: None,
             textures: [
@@ -95,7 +95,7 @@ impl GameManager {
     pub fn draw(&self) {
         //switch to move later
         draw_texture(self.textures[0], self.pos.0, self.pos.1, WHITE);
-        self.draw_bitboard(Bitboard::from_index(self.chess.en_passant));
+        self.draw_bitboard(self.chess.white_pins);
         self.draw_move(self.chess.last_move.0, self.chess.last_move.1);
         self.draw_check();
         for (i, piece) in self.chess.board.iter().enumerate() {
@@ -246,10 +246,15 @@ impl GameManager {
                     }
                     self.get_mouse_pos();
                     if self.mouse_pos.is_some()
-                        && self.chess.moves.contains(&(self.mouse_pos.unwrap() as u8))
+                        && self
+                            .chess
+                            .moves
+                            .contains(&(self.mouse_pos.expect("liam is obese") as u8))
                     {
-                        self.chess
-                            .move_piece(piece_index as u8, self.mouse_pos.unwrap() as u8);
+                        self.chess.move_piece(
+                            piece_index as u8,
+                            self.mouse_pos.expect("liam is obese") as u8,
+                        );
                         self.chess.moves = vec![];
                         break;
                     }
@@ -278,7 +283,7 @@ impl GameManager {
         }
     }
     pub fn ai_turn(&mut self) {
-        let (from, to) = self.ai.best_move(self.chess.clone());
+        let (from, to) = self.ai.best_move(&mut self.chess);
         self.chess.move_piece(from, to);
     }
     pub fn game_state(&mut self) -> i32 {
@@ -312,42 +317,58 @@ impl GameManager {
         }
     }
     pub async fn pvai(&mut self) {
-        //self.change_ai_timer()
         clear_background(BLACK);
         if self.player_vs_ai == BlackWhite::Black {
+            let ai_start_time = Instant::now();
             self.ai_turn();
+            let ai_duration = ai_start_time.elapsed();
+            println!("AI's turn duration: {:?}", ai_duration);
         }
         while self.game_state() == 2 {
             self.draw();
             if is_mouse_button_pressed(MouseButton::Left) {
                 self.get_mouse_pos();
                 self.player_turn().await;
+                self.draw();
+                next_frame().await;
+
+                let ai_start_time = Instant::now();
                 self.ai_turn();
+                let ai_duration = ai_start_time.elapsed();
+                println!("AI's turn duration: {:?}", ai_duration);
             }
             next_frame().await;
         }
+        // loop {
+        //     self.draw();
+        //     next_frame().await;
+        // }
+    }
+    fn winning_title(&self) {
+        let text = match self.game_state {
+            0 => "tie by stalemate",
+            -1 => "black won by checkmate",
+            1 => "white won by checkmate",
+            3 => "tie by insufficient material",
+            4 => "tie by threefold repetition",
+            5 => "tie by the 50 move rule",
+            6 => "time forfeit",
+            _ => "undefined",
+        };
+        let text_width = measure_text(text, None, 100, 1.0).width;
+        let screen_width = screen_width();
+        let x_centered = (screen_width - text_width) / 2.0;
+        draw_text(text, x_centered, 150.0, 100.0, GREEN);
     }
     fn draw_title(&self) {
-        draw_text(
-            match self.game_state {
-                -2 => "white turn",
-                -3 => "black turn",
-                0 => "stalemate",
-                -1 => "black checkmate",
-                1 => "white checkmate",
-                3 => "Insufficient Material",
-                4 => "Threefold Repetition",
-                5 => "50 move rule",
-                6 => "time forfeit",
-                _ => "undefined",
-            },
-            930.0,
-            300.0,
-            100.0,
-            GREEN,
-        );
+        if self.game_state == -3 {
+            draw_text("black turn", 1070.0, 350.0, 100.0, GREEN);
+        } else if self.game_state == -2 {
+            draw_text("white turn", 1070.0, 350.0, 100.0, GREEN);
+        } else {
+            self.winning_title();
+        }
         if self.game_state == -1 {
-            //win title
             let loc = self.chess.black_king;
             let x = (loc % 8) as f32 * 100.0 + self.pos.0;
             let y = (loc / 8) as f32 * 100.0 + self.pos.1 - 35.0;
@@ -359,7 +380,6 @@ impl GameManager {
             );
         }
         if self.game_state == 1 {
-            //win title
             let loc = self.chess.white_king;
             let x = (loc % 8) as f32 * 100.0 + self.pos.0;
             let y = (loc / 8) as f32 * 100.0 + self.pos.1 - 35.0;
@@ -370,7 +390,7 @@ impl GameManager {
                 WHITE,
             );
         }
-        if self.game_state == 6 {} // winner titles and crowns
+        if self.game_state == 6 {} // winner titles and crowns for time forfiet
         if self.game_state == 0 || (3..6).contains(&self.game_state) {
             //draw title
             let loc = self.chess.white_king;

@@ -148,17 +148,37 @@ impl Chess {
         .get_bit(king_position)
     }
     pub fn move_piece(&mut self, from: u8, to: u8) -> ChessMove {
+        let mut rook_cancel: u8 = 4;
         let mut castle_flag = false;
         let mut en_passant_flag = false;
-        let captured_piece = self.board[to as usize];
+        let king_loc = if self.is_white_turn {
+            self.white_king
+        } else {
+            self.black_king
+        };
+        let mut captured_piece = self.board[to as usize];
         // self.last_attack = if self.is_white_turn {
         //     self.white_attack
         // } else {
         //     self.black_attack
         // };
         let piece = self.board[from as usize];
+        if let Piece::Wpawn = piece {
+            if to == self.en_passant {
+                en_passant_flag = true;
+                let captured_piece_index = to + 8;
+                captured_piece = Piece::Bpawn;
+                self.board[captured_piece_index as usize] = Piece::Empty;
+            }
+        } else if let Piece::Bpawn = piece {
+            if to == self.en_passant {
+                en_passant_flag = true;
+                let captured_piece_index = to - 8;
+                captured_piece = Piece::Wpawn;
+                self.board[captured_piece_index as usize] = Piece::Empty;
+            }
+        }
         self.en_passant = 64;
-
         match piece {
             Piece::Bking => {
                 self.castling[2] = false;
@@ -173,15 +193,19 @@ impl Chess {
             Piece::Brook => {
                 if from == 7 {
                     self.castling[2] = false;
+                    rook_cancel = 2;
                 } else if from == 0 {
                     self.castling[3] = false;
+                    rook_cancel = 3;
                 }
             }
             Piece::Wrook => {
                 if from == 63 {
                     self.castling[0] = false;
+                    rook_cancel = 0;
                 } else if from == 56 {
                     self.castling[1] = false;
+                    rook_cancel = 1;
                 }
             }
             Piece::Wpawn => {
@@ -207,21 +231,6 @@ impl Chess {
         } else {
             self.board[to as usize] = piece;
         }
-
-        if let Piece::Wpawn = piece {
-            if to == self.en_passant {
-                en_passant_flag = true;
-                let captured_piece_index = to - 8;
-                self.board[captured_piece_index as usize] = Piece::Empty;
-            }
-        } else if let Piece::Bpawn = piece {
-            if to == self.en_passant {
-                en_passant_flag = true;
-                let captured_piece_index = to + 8;
-                self.board[captured_piece_index as usize] = Piece::Empty;
-            }
-        }
-
         if let Piece::Bking = piece {
             if from == 4 && to == 6 {
                 // Perform kingside castling for white
@@ -256,39 +265,66 @@ impl Chess {
         //update bitboard of the moved piece side attack (if white moves, update white. that way black will already be updated from last move)
         self.update_attacked_squares();
         self.is_white_turn = !self.is_white_turn;
+        self.last_move = (from, to);
         ChessMove {
             from,
             to,
             castle_flag,
             en_passant_flag,
             captured_piece,
+            last_king_placement: king_loc,
+            rook_cancel,
         }
     }
-
     pub fn undo_move(&mut self, chess_move: ChessMove) {
-        self.is_white_turn = !self.is_white_turn;
-        if chess_move.castle_flag {
-            todo!("do stuff")
-        } else if chess_move.en_passant_flag {
-            self.board[chess_move.from as usize] = self.board[chess_move.to as usize];
-            self.board[chess_move.to as usize] = Piece::Empty;
-            if self.is_white_turn {
-                self.en_passant = chess_move.to + 8;
-                self.board[self.en_passant as usize] = Piece::Bpawn;
-            } else {
-                self.en_passant = chess_move.to - 8;
-                self.board[self.en_passant as usize] = Piece::Wpawn;
-            }
-        }
         self.board[chess_move.from as usize] = self.board[chess_move.to as usize];
         self.board[chess_move.to as usize] = chess_move.captured_piece;
-        self.en_passant = 65;
+        if chess_move.rook_cancel != 4 {
+            self.castling[chess_move.rook_cancel as usize] = true;
+        }
+        self.en_passant = 64;
+        self.is_white_turn = !self.is_white_turn;
+        if chess_move.castle_flag {
+            if self.king_loc() == 62 {
+                self.castling[0] = true;
+                self.board[61] = Piece::Empty;
+                self.board[63] = Piece::Wrook;
+            } else if self.king_loc() == 58 {
+                self.castling[1] = true;
+                self.board[59] = Piece::Empty;
+                self.board[56] = Piece::Wrook;
+            } else if self.king_loc() == 6 {
+                self.castling[2] = true;
+                self.board[5] = Piece::Empty;
+                self.board[7] = Piece::Brook;
+            } else if self.king_loc() == 2 {
+                self.castling[3] = true;
+                self.board[3] = Piece::Empty;
+                self.board[0] = Piece::Brook;
+            } else {
+                panic!(
+                    "failed to revert castling {} {}",
+                    self.king_loc(),
+                    self.is_white_turn
+                )
+            }
+        } else if chess_move.en_passant_flag {
+            self.board[chess_move.to as usize] = Piece::Empty;
+            if self.is_white_turn {
+                self.en_passant = chess_move.to;
+                self.board[chess_move.to as usize + 8] = Piece::Bpawn;
+            } else {
+                self.en_passant = chess_move.to;
+                self.board[chess_move.to as usize - 8] = Piece::Wpawn;
+            }
+        }
+        if self.is_white_turn {
+            self.white_king = chess_move.last_king_placement;
+        } else {
+            self.black_king = chess_move.last_king_placement;
+        }
     }
     pub fn update_attacked_squares(&mut self) {
-        //change a few things: 1. pawns attack are only captures
-        //possible moves are also eating friendly pieces
-        //only sliding moves are proccessed differently
-        // update the board of the color that moved
         self.checking_pieces = Vec::new();
         let mut attacked_squares = Bitboard::empty();
         for (i, piece) in self.board.into_iter().enumerate() {
@@ -303,7 +339,7 @@ impl Chess {
             self.black_attack = attacked_squares;
         }
     }
-    pub fn gen_moves(&mut self, index: usize, castling: bool) -> Vec<u8> {
+    pub fn gen_moves(&mut self, index: usize) -> Vec<u8> {
         match self.board[index] {
             Piece::Wking | Piece::Bking => self.gen_moves_king(index),
             Piece::Wqueen | Piece::Bqueen => {
@@ -320,7 +356,7 @@ impl Chess {
     }
     pub fn get_legals(&mut self, index: usize) {
         self.moves = self
-            .gen_moves(index, true)
+            .gen_moves(index)
             .iter()
             .filter(|&&move_index| self.is_legal(index as u8, move_index))
             .cloned()
@@ -1045,11 +1081,11 @@ impl Chess {
         moves
     }
     pub fn gen_attacks_pawn(&mut self, index: usize) -> Vec<u8> {
-        let color_offset = if self.board[index].is_white() { 0 } else { 64 };
-        let pawn_moves = &self.pawn_moves[index + color_offset];
+        let pawn_moves =
+            &self.pawn_moves[index + if self.board[index].is_white() { 0 } else { 64 }];
         let mut attacking_moves = Vec::with_capacity(2);
         for &move_index in pawn_moves.iter().skip(2) {
-            if move_index < 64 && self.board[move_index as usize].is_opponent(self.board[index]) {
+            if move_index < 64 {
                 attacking_moves.push(move_index);
                 if (self.board[index].is_white() && self.board[move_index as usize] == Piece::Bking)
                     || (!self.board[index].is_white()
@@ -1189,4 +1225,6 @@ pub struct ChessMove {
     pub castle_flag: bool,
     pub en_passant_flag: bool,
     pub captured_piece: Piece, // Stores the captured piece, if any
+    pub last_king_placement: u8,
+    pub rook_cancel: u8, // 0/1/2/3/4
 }

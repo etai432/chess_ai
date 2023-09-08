@@ -1,4 +1,3 @@
-use crate::chess::Piece;
 #[derive(Debug, Clone, Copy)]
 pub struct Bitboard(pub u64);
 
@@ -37,18 +36,6 @@ impl Bitboard {
     pub fn switch_on_index(&mut self, index: u8) {
         self.0 |= 1 << index;
     }
-    pub fn print_bit_representation(&self) {
-        for row in 0..8 {
-            for col in 0..8 {
-                let index = row * 8 + col;
-                let bit = (self.0 >> index) & 1;
-                let square = if bit == 1 { "X" } else { "." };
-                print!("{} ", square);
-            }
-            println!();
-        }
-        println!("-------------");
-    }
     // pub fn get_piece(&self) -> usize {
     //     if self.0 == 0 {
     //         panic!("Bitboard is empty.");
@@ -75,14 +62,6 @@ impl Bitboard {
     //     }
     //     bitboard
     // }
-
-    pub fn from_index(index: u8) -> Bitboard {
-        if (0..64).contains(&index) {
-            let mask = 1u64 << index;
-            return Bitboard(mask);
-        }
-        Bitboard(0)
-    }
 
     pub fn ray(from: u8, to: u8) -> Bitboard {
         let from_row = from / 8;

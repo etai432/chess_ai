@@ -27,55 +27,56 @@ pub fn window_conf() -> Conf {
     }
 }
 
-// #[macroquad::main(window_conf)]
-// async fn main() {
-//     std::env::set_var("RUST_BACKTRACE", "1");
-//     menu().await;
+#[macroquad::main(window_conf)]
+async fn main() {
+    std::env::set_var("RUST_BACKTRACE", "1");
+    menu().await;
+}
+
+// fn main() {
+//     test_move_generation_speed(5);
+//     // benchmark_chess();
+//     // println!("hello");
 // }
 
-fn main() {
-    // test_move_generation_speed(5)
-    benchmark_chess();
-}
+// fn benchmark_chess() {
+//     // Initialize chessboard
+//     let mut chess = Chess::new();
+//     // Measure time for move_gen
+//     let start_time_move_gen = Instant::now();
+//     chess.get_all_moves();
+//     let elapsed_time_move_gen = start_time_move_gen.elapsed();
 
-fn benchmark_chess() {
-    // Initialize chessboard
-    let mut chess = Chess::new();
-    // Measure time for move_gen
-    let start_time_move_gen = Instant::now();
-    chess.get_all_moves();
-    let elapsed_time_move_gen = start_time_move_gen.elapsed();
+//     let start_time_rook_bishop = Instant::now();
+//     chess.gen_moves_rook(28);
+//     chess.gen_moves_bishop(28);
+//     let elapsed_time_rook_bishop = start_time_rook_bishop.elapsed();
 
-    let start_time_rook_bishop = Instant::now();
-    chess.gen_moves_rook(28);
-    chess.gen_moves_bishop(28);
-    let elapsed_time_rook_bishop = start_time_rook_bishop.elapsed();
+//     // Measure time for update_attacked_squares
+//     let start_time_update_attacked_squares = Instant::now();
+//     chess.update_attacked_squares();
+//     let elapsed_time_update_attacked_squares = start_time_update_attacked_squares.elapsed();
 
-    // Measure time for update_attacked_squares
-    let start_time_update_attacked_squares = Instant::now();
-    chess.update_attacked_squares();
-    let elapsed_time_update_attacked_squares = start_time_update_attacked_squares.elapsed();
+//     // Measure time for move_piece
+//     let start_time_move_piece = Instant::now();
+//     let chess_move = chess.move_piece(48, 40);
+//     let elapsed_time_move_piece = start_time_move_piece.elapsed();
 
-    // Measure time for move_piece
-    let start_time_move_piece = Instant::now();
-    let chess_move = chess.move_piece(48, 40);
-    let elapsed_time_move_piece = start_time_move_piece.elapsed();
+//     // Measure time for undo_move
+//     let start_time_undo_move = Instant::now();
+//     chess.undo_move(chess_move);
+//     let elapsed_time_undo_move = start_time_undo_move.elapsed();
 
-    // Measure time for undo_move
-    let start_time_undo_move = Instant::now();
-    chess.undo_move(chess_move);
-    let elapsed_time_undo_move = start_time_undo_move.elapsed();
-
-    // Print the elapsed times
-    println!("move_gen elapsed time: {:?}", elapsed_time_move_gen);
-    println!("rook_bishop elapsed time: {:?}", elapsed_time_rook_bishop);
-    println!(
-        "update_attacked_squares elapsed time: {:?}",
-        elapsed_time_update_attacked_squares
-    );
-    println!("move_piece elapsed time: {:?}", elapsed_time_move_piece);
-    println!("undo_move elapsed time: {:?}", elapsed_time_undo_move);
-}
+//     // Print the elapsed times
+//     println!("move_gen elapsed time: {:?}", elapsed_time_move_gen);
+//     println!("rook_bishop elapsed time: {:?}", elapsed_time_rook_bishop);
+//     println!(
+//         "update_attacked_squares elapsed time: {:?}",
+//         elapsed_time_update_attacked_squares
+//     );
+//     println!("move_piece elapsed time: {:?}", elapsed_time_move_piece);
+//     println!("undo_move elapsed time: {:?}", elapsed_time_undo_move);
+// }
 
 // fn test_move_generation_speed(depth_ai: i32) {
 //     let start_time = Instant::now();
@@ -289,11 +290,13 @@ enum Pv {
 //game endings: Draw by Insufficient Material, Draw by Threefold Repetition, Draw by Fifty-Move Rule, Time Forfeit (also make them useful in a game)
 
 //todo list:
+//undo promotions, attacks maps, pins
 //game endings- timers, threefold, insufficient
-//winner titles
-//bugs go here:
-//en passant did not take the pawn
-//handle castling
 //better ai
-//optimazing- maybe use magic bitboards for sliding pieces idfk- much later. also look for what else i can optimize:
-//maybe if ai not good enough, try magic bitboards
+//magic bitboards?
+
+//bugs go here:
+//an passant didnt take pawn- prob does now idfk
+//horsey cant take checking piece? (pawns can)
+//bishop pin sucks ass
+//i hate my life
