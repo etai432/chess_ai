@@ -95,9 +95,9 @@ impl GameManager {
     pub fn draw(&self) {
         //switch to move later
         draw_texture(self.textures[0], self.pos.0, self.pos.1, WHITE);
-        self.draw_bitboard(self.chess.white_pins);
+        //self.draw_bitboard(self.chess.white_pins);
         self.draw_move(self.chess.last_move.0, self.chess.last_move.1);
-        self.draw_check();
+        //self.draw_check();
         for (i, piece) in self.chess.board.iter().enumerate() {
             let row = i / 8;
             let col = i % 8;
@@ -322,7 +322,7 @@ impl GameManager {
             let ai_start_time = Instant::now();
             self.ai_turn();
             let ai_duration = ai_start_time.elapsed();
-            println!("AI's turn duration: {:?}", ai_duration);
+            //println!("AI's turn duration: {:?}", ai_duration);
         }
         while self.game_state() == 2 {
             self.draw();
@@ -335,7 +335,7 @@ impl GameManager {
                 let ai_start_time = Instant::now();
                 self.ai_turn();
                 let ai_duration = ai_start_time.elapsed();
-                println!("AI's turn duration: {:?}", ai_duration);
+                //println!("AI's turn duration: {:?}", ai_duration);
             }
             next_frame().await;
         }
